@@ -1,0 +1,14 @@
+requests
+pillow
+fastapi
+uvicorn
+python-multipart
+openai
+google-generativeai
+python-dotenv
+pandas
+openpyxl
+watchdog
+websockets
+opencv-python-headless
+numpy

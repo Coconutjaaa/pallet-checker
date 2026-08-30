@@ -1,0 +1,7 @@
+.env
+__pycache__/
+venv/
+database/receipts.db
+database/receipts2.db
+database/receipts3.db
+database/receipts4.db
