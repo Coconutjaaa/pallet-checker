@@ -224,8 +224,8 @@ def startup_event():
 
     if DATABASE_URL:
         init_db()
-        load_master_data()
-        load_transaction_data()
+        # load_master_data()
+        # load_transaction_data()
     
     folder_to_watch = os.path.join(os.getcwd(), "database", "truckscale")
     if os.path.exists(folder_to_watch):
@@ -239,6 +239,7 @@ def extract_data_from_image(image_path: str, points_str: str = None) -> dict:
     try:
         img = Image.open(image_path)
         img = ImageOps.exif_transpose(img).convert('RGB')
+        img.thumbnail((1200, 1200))
     except FileNotFoundError:
         return {"success": False, "message": "ไม่พบไฟล์ภาพ"}
 
