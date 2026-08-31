@@ -203,8 +203,8 @@ def startup_event():
 
     if DATABASE_URL:
         init_db()
-        # load_master_data()
-        # load_transaction_data()
+        load_master_data()
+        load_transaction_data()
     
     folder_to_watch = os.path.join(os.getcwd(), "database", "truckscale")
     if os.path.exists(folder_to_watch):
@@ -555,5 +555,14 @@ async def get_pallets_by_plant(plant_short_name: str):
         else:
             return {"success": True, "pallets": []}
             
+    except Exception as e:
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/manual-reload")
+async def manual_reload():
+    try:
+        load_master_data()
+        load_transaction_data()
+        return {"success": True, "message": "อัปเดตข้อมูลจาก Excel ลง PostgreSQL สำเร็จแล้ว!"}
     except Exception as e:
         return {"success": False, "message": str(e)}
