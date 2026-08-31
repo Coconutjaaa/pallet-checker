@@ -23,6 +23,7 @@ from watchdog.events import FileSystemEventHandler
 import psycopg2
 import psycopg2.extras
 from sqlalchemy import create_engine
+import gc
 
 load_dotenv()
 
@@ -151,35 +152,55 @@ def init_db():
 def load_master_data():
     pallet_file = "database/truckscale/MasterData_Pallet.xlsx"
     plant_file = "database/truckscale/MasterData_Plant.xlsx"
-    if os.path.exists(pallet_file) and os.path.exists(plant_file):
+    
+    # สร้าง Engine เชื่อมต่อแค่ครั้งเดียว
+    engine = create_engine(SQLALCHEMY_DB_URL)
+    
+    if os.path.exists(pallet_file):
         df_pallet = pd.read_excel(pallet_file)
-        df_plant = pd.read_excel(plant_file)
+        # chunksize=1000 คือให้ทยอยบันทึกทีละ 1000 แถว ป้องกัน RAM เต็ม
+        df_pallet.to_sql('master_pallet', engine, if_exists='replace', index=False, chunksize=1000)
+        del df_pallet # ลบตัวแปรทิ้งทันที
+        gc.collect()  # คืนพื้นที่ RAM ให้ระบบ
         
-        # ใช้ SQLAlchemy Engine สำหรับ Pandas .to_sql()
-        engine = create_engine(SQLALCHEMY_DB_URL)
-        df_pallet.to_sql('master_pallet', engine, if_exists='replace', index=False)
-        df_plant.to_sql('master_plant', engine, if_exists='replace', index=False)
-        engine.dispose()
-        print("✅ โหลด Master Data (Plant, Pallet) เสร็จสมบูรณ์")
+    if os.path.exists(plant_file):
+        df_plant = pd.read_excel(plant_file)
+        df_plant.to_sql('master_plant', engine, if_exists='replace', index=False, chunksize=1000)
+        del df_plant
+        gc.collect()
+        
+    engine.dispose()
+    print("✅ โหลด Master Data (Plant, Pallet) เสร็จสมบูรณ์")
+
 
 def load_transaction_data():
     delivery_file = "database/truckscale/PalletControl_PalletDelivery.xlsx"
     weighing_file = "database/truckscale/Weighing_TruckWeighing.xlsx"
+    
+    engine = create_engine(SQLALCHEMY_DB_URL)
+    
     try:
-        if os.path.exists(delivery_file) and os.path.exists(weighing_file):
+        if os.path.exists(delivery_file):
             df_delivery = pd.read_excel(delivery_file)
+            df_delivery.to_sql('pallet_delivery', engine, if_exists='replace', index=False, chunksize=1000)
+            del df_delivery
+            gc.collect()
+
+        if os.path.exists(weighing_file):
             df_weighing = pd.read_excel(weighing_file)
+            df_weighing.to_sql('truck_weighing', engine, if_exists='replace', index=False, chunksize=1000)
+            del df_weighing
+            gc.collect()
             
-            engine = create_engine(SQLALCHEMY_DB_URL)
-            df_delivery.to_sql('pallet_delivery', engine, if_exists='replace', index=False)
-            df_weighing.to_sql('truck_weighing', engine, if_exists='replace', index=False)
-            engine.dispose()
-            print("🔄 [อัปเดตอัตโนมัติ] ข้อมูลรถบรรทุกล่าสุดถูกโหลดเข้า Database แล้ว!")
+        print("🔄 [อัปเดตอัตโนมัติ] ข้อมูลรถบรรทุกล่าสุดถูกโหลดเข้า Database แล้ว!")
+        
+        if loop and loop.is_running():
+            asyncio.run_coroutine_threadsafe(manager.broadcast("UPDATE"), loop)
             
-            if loop and loop.is_running():
-                asyncio.run_coroutine_threadsafe(manager.broadcast("UPDATE"), loop)
     except Exception as e:
         print(f"⚠️ เกิดข้อผิดพลาดในการโหลดข้อมูลรถ: {e}")
+    finally:
+        engine.dispose()
 
 class ExcelFileHandler(FileSystemEventHandler):
     def on_modified(self, event):
@@ -431,16 +452,15 @@ async def save_truck_image(payload: TruckImageCreate):
             return {"success": False, "message": "ไม่พบข้อมูลรูปภาพ"}
 
         conn = get_db_connection()
-        # ใช้ DictCursor แทน sqlite3.Row
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
-        # เพิ่มการป้องกัน Type Error ด้วย CAST(... AS TEXT) ใน PostgreSQL
+        # เพิ่ม "" คลุม carRegister, weightOut, weightOutTime
         cursor.execute('''
-            SELECT row_key 
+            SELECT "row_key" 
             FROM truck_weighing 
-            WHERE REPLACE(CAST(carRegister AS TEXT), ' ', '') = %s
-              AND (weightOut IS NULL OR CAST(weightOut AS TEXT) = '0' OR CAST(weightOut AS TEXT) = '' OR weightOutTime IS NULL OR CAST(weightOutTime AS TEXT) = '' OR CAST(weightOutTime AS TEXT) = '-')
-            ORDER BY row_key DESC 
+            WHERE REPLACE(CAST("carRegister" AS TEXT), ' ', '') = %s
+              AND ("weightOut" IS NULL OR CAST("weightOut" AS TEXT) = '0' OR CAST("weightOut" AS TEXT) = '' OR "weightOutTime" IS NULL OR CAST("weightOutTime" AS TEXT) = '' OR CAST("weightOutTime" AS TEXT) = '-')
+            ORDER BY "row_key" DESC 
             LIMIT 1
         ''', (clean_plate,))
         
@@ -468,6 +488,7 @@ async def save_truck_image(payload: TruckImageCreate):
 
         return {"success": True, "message": f"✅ จับคู่และบันทึกรูปรถทะเบียน '{payload.license_plate}' ลงในรอบการชั่งปัจจุบันสำเร็จ!"}
     except Exception as e:
+        print(f"❌ API Save Truck Image Error: {e}")
         return {"success": False, "message": str(e)}
 
 @app.get("/api/records")
@@ -476,18 +497,19 @@ async def get_records():
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
+        # เพิ่ม "" ครอบชื่อคอลัมน์ที่มาจาก Excel
         cursor.execute("""
             SELECT r.*, 
-                   truck.carRegister as license_plate, 
-                   truck.weightInTime as weight_in_time, 
-                   truck.weightIn as weight_in, 
-                   truck.weightOutTime as weight_out_time, 
-                   truck.weightOut as weight_out,
+                   truck."carRegister" as license_plate, 
+                   truck."weightInTime" as weight_in_time, 
+                   truck."weightIn" as weight_in, 
+                   truck."weightOutTime" as weight_out_time, 
+                   truck."weightOut" as weight_out,
                    timg.image_base64 as truck_image_base64
             FROM receipt_data r
-            LEFT JOIN pallet_delivery delivery ON r.document_no = delivery.receiptNumber
-            LEFT JOIN truck_weighing truck ON delivery.truckWeighingKey = truck.row_key
-            LEFT JOIN truck_scale_images timg ON truck.row_key = timg.truck_weighing_key
+            LEFT JOIN pallet_delivery delivery ON r.document_no = delivery."receiptNumber"
+            LEFT JOIN truck_weighing truck ON delivery."truckWeighingKey" = truck."row_key"
+            LEFT JOIN truck_scale_images timg ON truck."row_key" = timg.truck_weighing_key
             ORDER BY r.id DESC
         """)
         rows = cursor.fetchall()
@@ -518,6 +540,7 @@ async def get_records():
             })
         return {"success": True, "data": records}
     except Exception as e:
+        print(f"❌ API Records Error: {e}")
         return {"success": False, "message": str(e)}
 
 @app.delete("/api/clear")
@@ -539,11 +562,13 @@ async def get_pallets_by_plant(plant_short_name: str):
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
+        
+        # จุดสำคัญ: ใส่ "" คลุมชื่อคอลัมน์ และใช้ TRIM() ตัดช่องว่าง
         sql = """
-            SELECT pallet.name || ' - ' || pallet.code 
+            SELECT pallet."name" || ' - ' || pallet."code" 
             FROM master_pallet as pallet
-            INNER JOIN master_plant as plant ON pallet.plantId = plant.row_key
-            WHERE plant.shortName = %s
+            INNER JOIN master_plant as plant ON pallet."plantId" = plant."row_key"
+            WHERE TRIM(plant."shortName") = %s
         """
         cursor.execute(sql, (plant_short_name,))
         rows = cursor.fetchall()
@@ -556,6 +581,8 @@ async def get_pallets_by_plant(plant_short_name: str):
             return {"success": True, "pallets": []}
             
     except Exception as e:
+        # พิมพ์ Error ลง Terminal เพื่อให้รู้ทันทีว่าคอลัมน์ไหนผิด
+        print(f"❌ API Pallets Error: {e}") 
         return {"success": False, "message": str(e)}
 
 @app.get("/api/manual-reload")
