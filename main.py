@@ -239,12 +239,19 @@ def extract_data_from_image(image_path: str, points_str: str = None) -> dict:
     try:
         img = Image.open(image_path)
         img = ImageOps.exif_transpose(img).convert('RGB')
+        orig_width, orig_height = img.size
         img.thumbnail((1200, 1200))
+        new_width, new_height = img.size
+        ratio_x = new_width / orig_width
+        ratio_y = new_height / orig_height
     except FileNotFoundError:
         return {"success": False, "message": "ไม่พบไฟล์ภาพ"}
 
     if points_str:
         pts = json.loads(points_str)
+        for pt in pts:
+            pt['x'] = int(pt['x'] * ratio_x)
+            pt['y'] = int(pt['y'] * ratio_y)
         cv_img = np.array(img)
         
         warped_cv = four_point_transform(cv_img, pts)
