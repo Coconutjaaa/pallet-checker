@@ -203,8 +203,8 @@ def startup_event():
 
     if DATABASE_URL:
         init_db()
-        load_master_data()
-        load_transaction_data()
+        # load_master_data()
+        # load_transaction_data()
     
     folder_to_watch = os.path.join(os.getcwd(), "database", "truckscale")
     if os.path.exists(folder_to_watch):
