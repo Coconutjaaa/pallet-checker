@@ -147,8 +147,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-if DATABASE_URL:
-    init_db()
 
 def load_master_data():
     pallet_file = "database/truckscale/MasterData_Pallet.xlsx"
@@ -191,9 +189,6 @@ class ExcelFileHandler(FileSystemEventHandler):
                 time.sleep(1) 
                 load_transaction_data()
 
-if DATABASE_URL:
-    load_master_data()
-    load_transaction_data()
 
 API_KEY = os.getenv("GEMINI_API_KEY")
 if API_KEY:
@@ -205,6 +200,11 @@ app = FastAPI()
 def startup_event():
     global loop
     loop = asyncio.get_running_loop() 
+
+    if DATABASE_URL:
+        init_db()
+        load_master_data()
+        load_transaction_data()
     
     folder_to_watch = os.path.join(os.getcwd(), "database", "truckscale")
     if os.path.exists(folder_to_watch):
