@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pallet System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        .flash-green { animation: flashGreen 0.4s ease-out; }
+        @keyframes flashGreen {
+            0% { background-color: #ffffff; }
+            50% { background-color: #bbf7d0; } 
+            100% { background-color: #ffffff; }
+        }
+        .pulse-red { animation: pulseRed 2s infinite; }
+        @keyframes pulseRed {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+        .card-bg-light { background-color: #fdf5f5; }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans text-gray-800">
+
+    <!-- ==================== หน้า Login ==================== -->
+    <div id="loginPage" class="min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-lg w-full max-w-md border border-gray-200">
+            <div class="text-center mb-6">
+                <div class="w-16 h-16 bg-blue-600 text-white rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-md">
+                    <i class="fa-solid fa-boxes-stacked"></i>
+                </div>
+                <h1 class="text-2xl font-bold text-gray-800">ระบบตรวจสอบพาเลท</h1>
+                <p class="text-gray-500 mt-1">กรุณาเข้าสู่ระบบเพื่อยืนยันตัวตน</p>
+            </div>
+
+            <div class="bg-blue-50 text-blue-800 p-3 rounded-lg text-sm mb-6 border border-blue-200">
+                <p><strong><i class="fa-solid fa-circle-info"></i> คำแนะนำในการทดสอบ:</strong></p>
+                <ul class="list-disc ml-5 mt-1">
+                    <li>พิมพ์ <b>ADMIN</b> เพื่อเข้าหน้า Admin Dashboard</li>
+                    <li>พิมพ์รหัสอื่นๆ (เช่น CHK-01) เพื่อเข้าหน้าพนักงาน Checker</li>
+                </ul>
+            </div>
+
+            <div class="space-y-5">
+                <div>
+                    <label class="block text-gray-700 font-medium mb-2">รหัสพนักงาน (Checker ID / ADMIN)</label>
+                    <div class="relative">
+                        <i class="fa-solid fa-user absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="text" id="userId" placeholder="เช่น ADMIN หรือ CHK-001" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow uppercase">
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="block text-gray-700 font-medium">รหัสผ่าน</label>
+                    </div>
+                    <div class="relative">
+                        <i class="fa-solid fa-lock absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <input type="password" id="password" placeholder="พิมพ์อะไรก็ได้" value="1234" class="w-full pl-10 pr-12 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow">
+                        <button type="button" onclick="togglePassword()" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-600 focus:outline-none transition-colors">
+                            <i id="togglePasswordIcon" class="fa-solid fa-eye text-lg"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button onclick="handleLogin()" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-bold text-lg transition-colors mt-2 shadow-md flex justify-center items-center">
+                    เข้าสู่ระบบ <i class="fa-solid fa-arrow-right-to-bracket ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== หน้า App หลัก (Checker Scanner) ==================== -->
+    <div id="checkerPage" class="hidden pb-20">
+        <nav class="bg-blue-600 text-white p-4 shadow-md sticky top-0 z-10">
+            <div class="max-w-3xl mx-auto flex justify-between items-center">
+                <h1 class="text-xl font-bold truncate"><i class="fa-solid fa-clipboard-check mr-2"></i> บันทึกรับพาเลท</h1>
+                <div class="flex items-center gap-2 sm:gap-4">
+                    <span id="displayUser" class="text-sm bg-blue-700 px-3 py-1 rounded-full hidden sm:inline-block"><i class="fa-solid fa-user mr-1"></i> User</span>
+                    <button onclick="openCheckerHistoryPage()" class="text-white hover:text-blue-200 bg-blue-500 hover:bg-blue-700 p-2 rounded-lg transition-colors" title="ประวัติการทำงานของฉัน">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </button>
+                    <button onclick="handleLogout()" class="flex items-center text-blue-100 hover:text-white transition-colors bg-blue-700 hover:bg-red-500 px-3 py-1.5 rounded-lg" title="ออกจากระบบ">
+                        <i class="fa-solid fa-arrow-right-from-bracket mr-1 sm:mr-2"></i> <span class="font-bold text-sm hidden sm:inline-block">Log out</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="max-w-3xl mx-auto p-4 mt-4 space-y-6">
+            
+            <!-- Banner แจ้งเตือนเมื่ออยู่ในโหมดแก้ไข -->
+            <div id="editModeBanner" class="hidden bg-yellow-50 border-l-4 border-yellow-500 text-yellow-800 p-4 rounded-xl shadow-sm flex justify-between items-center animate-fade-in">
+                <div>
+                    <i class="fa-solid fa-pen-to-square mr-2 text-yellow-600"></i> 
+                    <strong class="text-yellow-700">โหมดแก้ไขข้อมูล</strong> 
+                    <span class="block sm:inline text-sm mt-1 sm:mt-0 sm:ml-2">กำลังแก้ไขใบนำส่ง: <span id="editModeDocNumber" class="font-bold border-b border-yellow-400"></span></span>
+                </div>
+                <button onclick="resetCheckerApp()" class="bg-white border border-yellow-300 hover:bg-yellow-100 text-yellow-800 px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-sm whitespace-nowrap">ยกเลิก</button>
+            </div>
+
+            <!-- ส่วน OCR -->
+            <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold text-gray-700">ข้อมูลใบนำส่งกระบะ</h2>
+                    <span id="ocrStatusBadge" class="hidden text-xs bg-green-100 text-green-700 px-2 py-1 rounded font-bold border border-green-300">ดึงข้อมูลสำเร็จ</span>
+                </div>
+                
+                <div id="ocrBeforeScan" class="text-center p-6 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50">
+                    <i class="fa-solid fa-file-invoice text-4xl text-gray-400 mb-3"></i>
+                    <p class="text-gray-500 mb-4 text-sm">ถ่ายรูปใบคืนพาเลทเพื่อดึงยอดด้วย OCR</p>
+                    <input type="file" id="cameraInput" accept="image/*" capture="environment" class="hidden" onchange="processImage(event)">
+                    <button onclick="document.getElementById('cameraInput').click()" id="btnScanOCR" class="bg-gray-800 hover:bg-gray-900 text-white px-6 py-3 rounded-lg font-bold flex items-center justify-center mx-auto transition-colors shadow">
+                        <i class="fa-solid fa-camera mr-2"></i> ถ่ายรูป / สแกนใบนำส่ง
+                    </button>
+                </div>
+
+                <div id="ocrAfterScan" class="hidden bg-blue-50 border border-blue-200 p-4 rounded-lg flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <div class="flex items-center gap-4 w-full">
+                        <div class="w-16 h-16 bg-gray-200 rounded-lg overflow-hidden border border-gray-300 flex-shrink-0 cursor-pointer hover:opacity-80 transition-opacity" onclick="openImageModal(currentImageBase64)" title="คลิกเพื่อดูรูปใหญ่">
+                            <img id="previewImage" src="" alt="OCR Document" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-1">
+                            <p class="text-sm text-blue-600 font-semibold">เลขที่ใบชั่ง: <span id="docNumberText" class="text-blue-900 font-bold">RTN-99824</span></p>
+                            <p class="text-gray-600 text-sm mt-1">จำนวนที่ลูกค้าเขียนมา</p>
+                        </div>
+                        <div class="text-right flex flex-col items-end">
+                            <div>
+                                <span id="expectedTotal" class="text-3xl font-bold text-blue-700">0</span>
+                                <span class="text-sm text-gray-500">พาเลท</span>
+                            </div>
+                            <!-- เพิ่มปุ่มลบรูปถ่ายใหม่ -->
+                            <button onclick="retakeImage()" class="mt-1 text-xs text-red-500 hover:text-red-700 flex items-center bg-red-50 hover:bg-red-100 px-2 py-1 rounded transition-colors border border-red-200 shadow-sm">
+                                <i class="fa-solid fa-trash-can mr-1"></i> ลบรูปถ่ายใหม่
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- เพิ่มประเภทพาเลท -->
+            <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <div class="relative flex-1">
+                        <div id="customSelectTrigger" class="w-full p-4 border border-gray-300 rounded-lg bg-gray-100 text-gray-400 cursor-not-allowed flex justify-between items-center transition-colors select-none" onclick="toggleDropdown()">
+                            <span id="customSelectText" class="text-lg truncate">-- กรุณาถ่ายรูปใบนำส่งก่อน --</span>
+                            <i id="customSelectIcon" class="fa-solid fa-chevron-down text-gray-500 transition-transform duration-200"></i>
+                        </div>
+
+                        <div id="customSelectMenu" class="hidden absolute z-30 w-full mt-2 bg-white border border-gray-200 rounded-xl shadow-2xl overflow-hidden flex flex-col">
+                            <div class="p-3 border-b border-gray-200 bg-gray-50 sticky top-0">
+                                <div class="relative">
+                                    <i class="fa-solid fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                                    <input type="text" id="palletSearchInput" placeholder="ค้นหาชื่อพาเลท..." class="w-full pl-9 p-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-base" onkeyup="renderDropdownList()">
+                                </div>
+                            </div>
+                            <ul id="palletOptionsList" class="max-h-64 overflow-y-auto custom-scrollbar p-1"></ul>
+                        </div>
+                    </div>
+                    <button onclick="addPallet()" id="btnAdd" class="bg-gray-400 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center cursor-not-allowed" disabled>
+                        <i class="fa-solid fa-plus mr-2"></i> เพิ่ม
+                    </button>
+                </div>
+            </section>
+
+            <!-- รายการที่นับ -->
+            <section class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-700">รายการที่ Checker นับได้จริง</h2>
+                    <span id="totalItems" class="text-sm text-gray-500">0 รายการ</span>
+                </div>
+                <div id="palletList" class="divide-y divide-gray-200">
+                    <div id="emptyState" class="p-8 text-center text-gray-400">
+                        <i class="fa-solid fa-clipboard-list text-4xl mb-3 text-gray-200"></i>
+                        <p class="text-sm">รอถ่ายรูปใบนำส่ง และเพิ่มประเภทพาเลท</p>
+                    </div>
+                </div>
+                <div class="p-4 bg-gray-50 border-t border-gray-200">
+                    <button id="btnSubmitData" onclick="previewData()" class="w-full bg-green-600 hover:bg-green-700 text-white p-4 rounded-lg font-bold text-xl flex items-center justify-center transition-colors shadow-sm">
+                        <i class="fa-solid fa-check-circle mr-2"></i> ตรวจสอบและบันทึก
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- ==================== หน้าประวัติของฉัน (Checker History Page) ==================== -->
+    <div id="checkerHistoryPage" class="hidden min-h-screen bg-gray-100 pb-20">
+        <nav class="bg-blue-700 text-white p-4 shadow-md sticky top-0 z-10">
+            <div class="max-w-3xl mx-auto flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <button onclick="closeCheckerHistoryPage()" class="text-white hover:text-blue-200 transition-colors p-2 rounded hover:bg-blue-800">
+                        <i class="fa-solid fa-arrow-left text-xl"></i>
+                    </button>
+                    <h1 class="text-xl font-bold truncate">ประวัติการบันทึกของฉัน</h1>
+                </div>
+            </div>
+        </nav>
+        
+        <main class="max-w-3xl mx-auto p-4 mt-4 space-y-4">
+            <!-- ช่องค้นหาตามวันที่ -->
+            <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col sm:flex-row items-center gap-3">
+                <div class="flex items-center gap-2 w-full sm:w-auto">
+                    <i class="fa-solid fa-calendar-days text-gray-500"></i>
+                    <label class="text-gray-700 font-medium text-sm">ค้นหาตามวันที่:</label>
+                </div>
+                <input type="date" id="checkerDateFilter" class="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none flex-1 w-full" onchange="renderCheckerHistory()">
+                <button onclick="clearCheckerDateFilter()" class="w-full sm:w-auto text-sm text-gray-600 hover:text-red-600 px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors font-medium">ล้างตัวกรอง</button>
+            </div>
+
+            <!-- รายการประวัติ -->
+            <div id="checkerHistoryContainerList" class="space-y-4"></div>
+        </main>
+    </div>
+
+    <!-- ==================== หน้า Admin Dashboard ==================== -->
+    <div id="adminPage" class="hidden min-h-screen bg-gray-100 pb-10">
+        <nav class="bg-gray-800 text-white p-4 shadow-md sticky top-0 z-10">
+            <div class="max-w-6xl mx-auto flex justify-between items-center">
+                <h1 class="text-xl font-bold truncate"><i class="fa-solid fa-chart-line mr-2 text-blue-400"></i> Admin Dashboard</h1>
+                <div class="flex items-center gap-4">
+                    <span class="text-sm bg-gray-700 px-3 py-1 rounded-full"><i class="fa-solid fa-shield-halved mr-1 text-yellow-400"></i> Administrator</span>
+                    <button onclick="handleLogout()" class="flex items-center text-gray-300 hover:text-white transition-colors bg-gray-700 hover:bg-red-500 px-3 py-1.5 rounded-lg" title="ออกจากระบบ">
+                        <i class="fa-solid fa-arrow-right-from-bracket mr-2"></i> <span class="font-bold text-sm">Log out</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <main class="max-w-6xl mx-auto p-4 mt-4">
+            
+            <div class="flex gap-2 mb-6 border-b border-gray-300">
+                <button id="tabDaily" onclick="switchAdminTab('daily')" class="px-6 py-3 font-bold text-blue-600 border-b-4 border-blue-600 transition-colors">
+                    <i class="fa-solid fa-calendar-day mr-2"></i> Monitor วันนี้
+                </button>
+                <button id="tabMonthly" onclick="switchAdminTab('monthly')" class="px-6 py-3 font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-colors">
+                    <i class="fa-solid fa-calendar-days mr-2"></i> Report รายเดือน
+                </button>
+            </div>
+
+            <!-- ===== ส่วน Monitor วันนี้ (Daily View) ===== -->
+            <div id="adminDailyView">
+                <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">ภาพรวมประจำวัน</h2>
+                        <p class="text-gray-500 text-sm">อัปเดตแบบเรียลไทม์ (เลือกวันที่เพื่อดูข้อมูล)</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <label class="text-gray-600 font-medium text-sm">เลือกวันที่:</label>
+                            <input type="date" id="adminDatePicker" class="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="clearDiscrepancyFilter()">
+                        </div>
+                        <div class="text-sm text-gray-500 hidden sm:block">
+                            <i class="fa-solid fa-circle text-green-500 text-xs mr-1"></i> ระบบกำลังทำงาน
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-center">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-800">สรุปยอดพาเลทเข้าวันนี้</h3>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+                            <div>
+                                <p class="text-xs text-gray-500 font-medium mb-1">ลูกค้าเขียน</p>
+                                <p class="text-xl font-bold text-gray-700"><span id="adminStatExpected">0</span></p>
+                            </div>
+                            <div class="border-l border-gray-100 pl-3">
+                                <p class="text-xs text-gray-500 font-medium mb-1">Checker นับ</p>
+                                <p class="text-xl font-bold text-blue-600"><span id="adminStatActual">0</span></p>
+                            </div>
+                            <div class="border-l border-gray-100 pl-3">
+                                <p class="text-xs text-gray-500 font-medium mb-1">ส่วนต่าง (Diff)</p>
+                                <p class="text-xl font-bold" id="adminStatDiff">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div onclick="toggleDiscrepancyFilter()" class="bg-white rounded-xl shadow-sm border border-red-200 p-6 flex flex-col justify-center cursor-pointer hover:bg-red-50 hover:shadow-md transition-all group">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <p class="text-red-500 text-sm font-medium">ใบนำส่งที่ "ยอดไม่ตรง" <span class="text-xs text-red-400 ml-1">(คลิกเพื่อกรอง)</span></p>
+                                <h3 class="text-3xl font-bold text-red-600"><span id="adminStatDiscrepancy">0</span> <span class="text-sm font-normal text-red-400">ใบ</span></h3>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
+                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-table mr-2"></i> ประวัติรับเข้าล่าสุด (วันนี้)</h2>
+                            <button id="btnClearDailyFilter" onclick="clearDiscrepancyFilter()" class="hidden text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-full font-bold transition-colors">
+                                <i class="fa-solid fa-xmark mr-1"></i> เลิกกรองยอดไม่ตรง
+                            </button>
+                        </div>
+                        <button onclick="clearDatabase()" class="text-sm text-red-500 hover:text-red-700"><i class="fa-solid fa-trash-can mr-1"></i> ล้างข้อมูลทั้งหมด</button>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-600 whitespace-nowrap">
+                            <thead class="bg-gray-100 text-gray-700 uppercase border-b border-gray-200 text-xs">
+                                <tr>
+                                    <th class="px-4 py-3">document_no</th>
+                                    <th class="px-4 py-3">date</th>
+                                    <th class="px-4 py-3">customer_name</th>
+                                    <th class="px-4 py-3">customer_code</th>
+                                    <th class="px-4 py-3 text-center">checker_name</th>
+                                    <th class="px-4 py-3 text-right">expected_qty (ลูกค้า)</th>
+                                    <th class="px-4 py-3 text-right">actual_qty</th>
+                                    <th class="px-4 py-3 text-center">diff (รับจริง - ลูกค้า)</th>
+                                    <th class="px-4 py-3 w-64">pallet_details (ประเภท - จำนวน)</th>
+                                    <th class="px-4 py-3 text-center">Image</th>
+                                </tr>
+                            </thead>
+                            <tbody id="adminRecordTableBody" class="divide-y divide-gray-200 bg-white">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== ส่วน Report รายเดือน (Monthly View) ===== -->
+            <div id="adminMonthlyView" class="hidden">
+                <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">รายงานสรุปรายเดือน</h2>
+                        <p class="text-gray-500 text-sm">ข้อมูลสะสมเพื่อการวิเคราะห์แนวโน้ม</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-gray-600 font-medium">เลือกเดือน (ค.ศ.):</label>
+                        <input type="month" id="reportMonthPicker" class="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none" onchange="generateMonthlyReport()">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2"><i class="fa-solid fa-box-open mr-2 text-blue-500"></i>ยอดรับเข้าสะสม (เดือนที่เลือก)</h3>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500">จำนวนบิลทั้งหมด:</span>
+                            <span id="monthlyTotalBills" class="font-bold text-xl">0</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-gray-500">รวมพาเลทรับเข้าจริง:</span>
+                            <span id="monthlyTotalPallets" class="font-bold text-2xl text-blue-700">0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2"><i class="fa-solid fa-chart-simple mr-2 text-red-500"></i>สรุปปัญหา (เดือนที่เลือก)</h3>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500">บิลที่ยอดไม่ตรง:</span>
+                            <span id="monthlyDiscrepancyBills" class="font-bold text-xl text-red-600">0</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-gray-500">ส่วนต่างพาเลททั้งหมด (คาดหวัง - รับจริง):</span>
+                            <span id="monthlyPalletDiff" class="font-bold text-2xl text-red-700">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-list mr-2"></i> ประวัติรายการในเดือนนี้</h2>
+                        <button class="text-sm text-green-600 hover:text-green-800 font-medium" onclick="showCustomAlert('info', 'Export', 'ฟีเจอร์ Export Excel จะพัฒนาในเฟสถัดไป')"><i class="fa-solid fa-file-excel mr-1"></i> Export Data</button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-600 whitespace-nowrap">
+                            <thead class="bg-gray-100 text-gray-700 uppercase border-b border-gray-200 text-xs">
+                                <tr>
+                                    <th class="px-4 py-3">document_no</th>
+                                    <th class="px-4 py-3">date</th>
+                                    <th class="px-4 py-3">customer_name</th>
+                                    <th class="px-4 py-3">customer_code</th>
+                                    <th class="px-4 py-3 text-center">checker_name</th>
+                                    <th class="px-4 py-3 text-right">expected_qty (ลูกค้า)</th>
+                                    <th class="px-4 py-3 text-right">actual_qty</th>
+                                    <th class="px-4 py-3 text-center">diff (รับจริง - ลูกค้า)</th>
+                                    <th class="px-4 py-3 w-64">pallet_details (ประเภท - จำนวน)</th>
+                                    <th class="px-4 py-3 text-center">Image</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monthlyRecordTableBody" class="divide-y divide-gray-200 bg-white">
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ==================== Modals & Popups ==================== -->
+    
+    <!-- Image Viewer Modal -->
+    <div id="imageViewerModal" class="fixed inset-0 bg-black bg-opacity-90 hidden flex flex-col items-center justify-center z-[70] p-4 backdrop-blur-sm transition-opacity" onclick="closeImageModal()">
+        <button class="absolute top-4 right-4 md:top-8 md:right-8 text-white text-4xl hover:text-gray-300 focus:outline-none transition-colors" onclick="closeImageModal()">&times;</button>
+        <img id="fullSizeImage" src="" class="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl transform transition-transform duration-300 scale-95" onclick="event.stopPropagation()">
+        <p class="text-gray-300 mt-4 text-sm font-medium">คลิกที่พื้นที่ว่างเพื่อปิดรูปภาพ</p>
+    </div>
+
+    <!-- Modal Checker Confirm -->
+    <div id="confirmModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden flex items-center justify-center z-40 px-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden transform transition-all">
+            <div class="bg-blue-600 p-4 text-white flex items-center justify-between">
+                <h2 id="confirmModalTitle" class="text-xl font-bold"><i class="fa-solid fa-list-check mr-2"></i>สรุปรายการก่อนบันทึก</h2>
+                <button onclick="closeModal()" class="text-white hover:text-gray-200 text-xl"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="p-6">
+                <div id="discrepancyWarning" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 p-3 rounded-lg flex items-start gap-3">
+                    <i class="fa-solid fa-triangle-exclamation text-xl mt-0.5"></i>
+                    <div>
+                        <p class="font-bold text-sm">ยอดรวมนับจริง ไม่ตรงกับใบนำส่ง!</p>
+                        <p class="text-xs mt-1">สามารถบันทึกได้ แต่ระบบจะแจ้งเตือนให้ Admin ตรวจสอบทันที</p>
+                    </div>
+                </div>
+                <div id="summaryList" class="bg-gray-50 rounded-lg p-4 mb-4 max-h-60 overflow-y-auto divide-y divide-gray-200 border border-gray-200"></div>
+                <div class="flex gap-3 mt-6">
+                    <button onclick="closeModal()" class="flex-1 bg-white border-2 border-gray-300 hover:bg-gray-50 text-gray-700 py-3 rounded-lg font-bold transition-colors">
+                        แก้ไขยอด
+                    </button>
+                    <button onclick="confirmSubmit()" class="flex-1 bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-bold transition-colors shadow-md">
+                        ยืนยันส่งข้อมูล
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Custom Alert Popup -->
+    <div id="customAlertModal" class="fixed inset-0 bg-gray-900 bg-opacity-60 hidden flex items-center justify-center z-[60] px-4 backdrop-blur-sm">
+        <div class="bg-white rounded-xl shadow-2xl w-full max-w-sm overflow-hidden text-center p-6 transform transition-all">
+            <div id="alertIcon" class="mx-auto mb-4 text-6xl"></div>
+            <h3 id="alertTitle" class="text-2xl font-bold text-gray-800 mb-2"></h3>
+            <p id="alertMessage" class="text-gray-600 mb-6 text-lg whitespace-pre-line"></p>
+            <button onclick="closeAlert()" id="alertButton" class="w-full text-white py-3 rounded-lg font-bold text-lg transition-colors shadow-sm">ตกลง</button>
+        </div>
+    </div>
+
+    <script>
+        // === Global State ===
+        let palletCount = 0, ocrExpectedQty = 0, totalActualPiecesGlobal = 0;
+        let isOcrScanned = false, currentUser = "";
+        let currentDocNumber = "", currentImageBase64 = "";
+        
+        let audioCtx;
+        let editingRecordId = null; // เก็บ ID ที่กำลังแก้ไข
+        let currentOcrFullData = {}; // เก็บ Object ลูกค้าที่ OCR อ่านมาได้เพื่อส่งให้ DB
+
+        const historyPallets = [
+            "พาเลทไม้ (Standard)",
+            "พาเลทพลาสติก (Blue)"
+        ];
+        const allPallets = [
+            "พาเลทไม้ (Standard)",
+            "พาเลทไม้ (Euro)",
+            "พาเลทพลาสติก (Blue)",
+            "พาเลทพลาสติก (Black)",
+            "พาเลทพลาสติก (Export)",
+            "พาเลทเหล็ก (Heavy)",
+            "พาเลทเหล็ก (Mesh)",
+            "พาเลทกระดาษ (Single Use)"
+        ];
+        
+        let selectedPalletValue = ""; 
+
+        document.getElementById('userId').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') { event.preventDefault(); handleLogin(); }
+        });
+        document.getElementById('password').addEventListener('keypress', function(event) {
+            if (event.key === 'Enter') { event.preventDefault(); handleLogin(); }
+        });
+
+        document.addEventListener('click', function(event) {
+            const trigger = document.getElementById('customSelectTrigger');
+            const menu = document.getElementById('customSelectMenu');
+            if (trigger && menu && !trigger.contains(event.target) && !menu.contains(event.target)) {
+                menu.classList.add('hidden');
+                if(document.getElementById('customSelectIcon')) {
+                    document.getElementById('customSelectIcon').classList.remove('rotate-180');
+                }
+            }
+        });
+
+        // === Authentication ===
+        function togglePassword() {
+            const pwd = document.getElementById('password');
+            const icon = document.getElementById('togglePasswordIcon');
+            if (pwd.type === 'password') {
+                pwd.type = 'text'; icon.classList.replace('fa-eye', 'fa-eye-slash');
+            } else {
+                pwd.type = 'password'; icon.classList.replace('fa-eye-slash', 'fa-eye');
+            }
+        }
+
+        function handleLogin() {
+            const userId = document.getElementById('userId').value.trim().toUpperCase();
+            if(!userId) { showCustomAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณากรอกรหัสพนักงานครับ'); return; }
+
+            if(!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            
+            currentUser = userId;
+            document.getElementById('loginPage').classList.add('hidden');
+
+            if (userId === 'ADMIN') {
+                document.getElementById('adminPage').classList.remove('hidden');
+                const now = new Date();
+                const currentMonthValue = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                document.getElementById('reportMonthPicker').value = currentMonthValue;
+                
+                const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                if(document.getElementById('adminDatePicker')) {
+                    document.getElementById('adminDatePicker').value = todayISO;
+                }
+                initAdminDashboard();
+            } else {
+                document.getElementById('displayUser').innerHTML = `<i class="fa-solid fa-user mr-1"></i> ${currentUser}`;
+                document.getElementById('checkerPage').classList.remove('hidden');
+            }
+        }
+
+        function handleLogout() {
+            if (adminPollingInterval) clearInterval(adminPollingInterval);
+            resetCheckerApp();
+            document.getElementById('userId').value = '';
+            document.getElementById('password').value = ''; 
+            document.getElementById('checkerPage').classList.add('hidden');
+            document.getElementById('checkerHistoryPage').classList.add('hidden');
+            document.getElementById('adminPage').classList.add('hidden');
+            document.getElementById('loginPage').classList.remove('hidden');
+        }
+
+        async function processImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const btn = document.getElementById('btnScanOCR');
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังส่งเข้า Gemini AI...';
+            btn.classList.add('opacity-75');
+
+            const formData = new FormData();
+            formData.append("file", file);
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (result.success) {
+                    isOcrScanned = true;
+                    const data = result.data;
+                    currentOcrFullData = data;
+                    
+                    currentDocNumber = data.document_no || "UNKNOWN-DOC";
+                    
+                    if (data.pallets_returned && data.pallets_returned.quantity_actual) {
+                        ocrExpectedQty = parseInt(data.pallets_returned.quantity_actual) || 0;
+                    } else {
+                        ocrExpectedQty = 0;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        currentImageBase64 = e.target.result;
+                        document.getElementById('previewImage').src = currentImageBase64;
+                    };
+                    reader.readAsDataURL(file);
+
+                    document.getElementById('ocrBeforeScan').classList.add('hidden');
+                    document.getElementById('ocrAfterScan').classList.remove('hidden');
+                    document.getElementById('ocrStatusBadge').classList.remove('hidden');
+                    
+                    // กลับมาใช้แท็ก Span ธรรมดา
+                    document.getElementById('docNumberText').innerText = currentDocNumber;
+                    document.getElementById('expectedTotal').innerText = ocrExpectedQty;
+
+                    const trigger = document.getElementById('customSelectTrigger');
+                    trigger.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+                    trigger.classList.add('bg-white', 'text-gray-800', 'cursor-pointer', 'hover:bg-gray-50');
+                    document.getElementById('customSelectText').innerText = "-- ค้นหาและเลือกประเภทพาเลท --";
+                    
+                    const btnAdd = document.getElementById('btnAdd');
+                    btnAdd.disabled = false;
+                    btnAdd.className = "bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center transition-colors shadow-sm";
+                } else {
+                    showCustomAlert('warning', 'OCR ไม่สำเร็จ', result.message || 'AI ไม่สามารถอ่านข้อมูลจากภาพนี้ได้');
+                    resetCheckerApp();
+                }
+            } catch (error) {
+                console.error(error);
+                showCustomAlert('warning', 'เกิดข้อผิดพลาด', 'ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ OCR ได้');
+                resetCheckerApp();
+            }
+        }
+        
+        // [เพิ่มใหม่] ฟังก์ชันลบรูปและรีเซ็ต OCR
+        function retakeImage() {
+            // ถ้านับพาเลทไปแล้ว ให้ถามยืนยันก่อน
+            if (palletCount > 0) {
+                if(!confirm('คุณมีรายการพาเลทที่นับไว้แล้ว ต้องการลบรูปภาพและถ่ายใหม่ใช่หรือไม่?\n(รายการพาเลทที่นับไว้จะยังคงอยู่)')) {
+                    return;
+                }
+            }
+            
+            isOcrScanned = false; 
+            ocrExpectedQty = 0; 
+            currentDocNumber = ""; 
+            currentImageBase64 = "";
+            currentOcrFullData = {};
+
+            document.getElementById('cameraInput').value = "";
+            document.getElementById('ocrBeforeScan').classList.remove('hidden');
+            document.getElementById('ocrAfterScan').classList.add('hidden');
+            document.getElementById('ocrStatusBadge').classList.add('hidden');
+            document.getElementById('btnScanOCR').innerHTML = '<i class="fa-solid fa-camera mr-2"></i> ถ่ายรูป / สแกนใบนำส่ง';
+            document.getElementById('btnScanOCR').classList.remove('opacity-75');
+            
+            const trigger = document.getElementById('customSelectTrigger');
+            if(trigger) {
+                trigger.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+                trigger.classList.remove('bg-white', 'text-gray-800', 'cursor-pointer', 'hover:bg-gray-50');
+            }
+            const triggerText = document.getElementById('customSelectText');
+            if(triggerText) {
+                triggerText.innerText = "-- กรุณาถ่ายรูปใบนำส่งก่อน --";
+                triggerText.classList.remove('text-blue-700', 'font-semibold');
+            }
+            selectedPalletValue = "";
+            const menu = document.getElementById('customSelectMenu');
+            if (menu) menu.classList.add('hidden');
+            const icon = document.getElementById('customSelectIcon');
+            if(icon) icon.classList.remove('rotate-180');
+
+            // ล็อกปุ่มเพิ่มพาเลทจนกว่าจะสแกนใหม่
+            const btnAdd = document.getElementById('btnAdd');
+            if (btnAdd) {
+                btnAdd.disabled = true; 
+                btnAdd.className = "bg-gray-400 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center cursor-not-allowed";
+            }
+        }
+
+        function toggleDropdown() {
+            if(!isOcrScanned) return; 
+            const menu = document.getElementById('customSelectMenu');
+            const icon = document.getElementById('customSelectIcon');
+            
+            if (menu.classList.contains('hidden')) {
+                menu.classList.remove('hidden');
+                icon.classList.add('rotate-180');
+                document.getElementById('palletSearchInput').value = ""; 
+                renderDropdownList();
+                document.getElementById('palletSearchInput').focus(); 
+            } else {
+                menu.classList.add('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        }
+
+        function renderDropdownList() {
+            const searchTerm = document.getElementById('palletSearchInput').value.toLowerCase();
+            const listContainer = document.getElementById('palletOptionsList');
+            listContainer.innerHTML = ''; 
+
+            const filteredHistory = historyPallets.filter(p => p.toLowerCase().includes(searchTerm));
+            const filteredAll = allPallets.filter(p => p.toLowerCase().includes(searchTerm));
+
+            if (filteredHistory.length === 0 && filteredAll.length === 0) {
+                listContainer.innerHTML = `<li class="p-4 text-center text-gray-500 text-sm">ไม่พบพาเลทที่ค้นหา</li>`;
+                return;
+            }
+
+            if (filteredHistory.length > 0) {
+                listContainer.innerHTML += `<li class="px-4 py-2 bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0"><i class="fa-solid fa-clock-rotate-left mr-1"></i> ประวัติล่าสุด</li>`;
+                filteredHistory.forEach(pallet => {
+                    listContainer.innerHTML += `<li class="px-4 py-3 hover:bg-blue-50 cursor-pointer text-gray-800 border-b border-gray-100 transition-colors" onclick="selectPalletOption('${pallet}')">${pallet}</li>`;
+                });
+            }
+
+            if (filteredAll.length > 0) {
+                listContainer.innerHTML += `<li class="px-4 py-2 bg-gray-100 text-xs font-bold text-gray-500 uppercase tracking-wider sticky top-0"><i class="fa-solid fa-boxes-stacked mr-1"></i> ประเภทพาเลททั้งหมด</li>`;
+                filteredAll.forEach(pallet => {
+                    listContainer.innerHTML += `<li class="px-4 py-3 hover:bg-blue-50 cursor-pointer text-gray-800 border-b border-gray-100 transition-colors" onclick="selectPalletOption('${pallet}')">${pallet}</li>`;
+                });
+            }
+        }
+
+        function selectPalletOption(palletName) {
+            selectedPalletValue = palletName;
+            document.getElementById('customSelectText').innerText = palletName;
+            document.getElementById('customSelectText').classList.add('text-blue-700', 'font-semibold');
+            document.getElementById('customSelectMenu').classList.add('hidden');
+            document.getElementById('customSelectIcon').classList.remove('rotate-180');
+        }
+
+        function addPallet() {
+            if(!isOcrScanned) return;
+            if (!selectedPalletValue) { showCustomAlert('warning', 'แจ้งเตือน', 'กรุณาเลือกประเภทพาเลทก่อนครับ'); return; }
+            if (document.querySelectorAll(`[data-name="${selectedPalletValue}"]`).length > 0) {
+                showCustomAlert('warning', 'ข้อมูลซ้ำ', 'พาเลทประเภทนี้ถูกเพิ่มแล้วครับ'); 
+                resetCustomSelect();
+                return;
+            }
+
+            document.getElementById('emptyState').style.display = 'none';
+            palletCount++;
+            document.getElementById('totalItems').innerText = `${palletCount} รายการ`;
+            
+            const itemId = `pallet-item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+            
+            const html = `
+                <div id="${itemId}" data-name="${selectedPalletValue}" class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div class="flex-1"><h3 class="font-bold text-lg text-blue-800 pallet-name">${selectedPalletValue}</h3></div>
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden h-12 bg-white">
+                            <button onclick="updateQty('${itemId}', -1)" class="px-4 py-2 bg-gray-100 font-bold border-r h-full active:bg-gray-300"><i class="fa-solid fa-minus"></i></button>
+                            <input type="number" id="qty-${itemId}" value="10" min="1" class="qty-input w-20 text-center font-bold text-xl h-full outline-none">
+                            <button onclick="updateQty('${itemId}', 1)" class="px-4 py-2 bg-gray-100 font-bold border-l h-full active:bg-gray-300"><i class="fa-solid fa-plus"></i></button>
+                        </div>
+                        <button onclick="removeItem('${itemId}')" class="text-red-500 hover:text-red-700 p-3 bg-red-50 rounded-lg"><i class="fa-solid fa-trash-can text-xl"></i></button>
+                    </div>
+                </div>`;
+            document.getElementById('palletList').insertAdjacentHTML('beforeend', html);
+            resetCustomSelect();
+        }
+
+        function resetCustomSelect() {
+            selectedPalletValue = "";
+            const triggerText = document.getElementById('customSelectText');
+            if(triggerText) {
+                triggerText.innerText = "-- ค้นหาและเลือกประเภทพาเลท --";
+                triggerText.classList.remove('text-blue-700', 'font-semibold');
+            }
+        }
+
+        function updateQty(itemId, change) {
+            const input = document.getElementById(`qty-${itemId}`);
+            let val = parseInt(input.value) || 0;
+            if (val + change >= 1) {
+                input.value = val + change;
+                input.classList.remove('flash-green'); void input.offsetWidth; input.classList.add('flash-green');
+            }
+        }
+
+        function removeItem(itemId) {
+            document.getElementById(itemId).remove(); palletCount--;
+            document.getElementById('totalItems').innerText = `${palletCount} รายการ`;
+            if (palletCount === 0) document.getElementById('emptyState').style.display = 'block';
+        }
+
+        function previewData() {
+            if (!isOcrScanned || palletCount === 0) {
+                showCustomAlert('warning', 'เตือน', 'กรุณาสแกนใบนำส่งและกรอกข้อมูลก่อนครับ'); return;
+            }
+            
+            const summaryList = document.getElementById('summaryList');
+            summaryList.innerHTML = ''; totalActualPiecesGlobal = 0;
+
+            document.querySelectorAll('#palletList > div[id^="pallet-item-"]').forEach(item => {
+                const name = item.querySelector('.pallet-name').innerText;
+                const qty = parseInt(item.querySelector('.qty-input').value) || 0;
+                totalActualPiecesGlobal += qty;
+                summaryList.innerHTML += `<div class="flex justify-between py-2 items-center"><span class="text-gray-700">${name}</span><span class="font-bold text-blue-700">${qty}</span></div>`;
+            });
+
+            const warnBox = document.getElementById('discrepancyWarning');
+            let colorClass = totalActualPiecesGlobal !== ocrExpectedQty ? "text-red-600" : "text-green-600";
+            totalActualPiecesGlobal !== ocrExpectedQty ? warnBox.classList.remove('hidden') : warnBox.classList.add('hidden');
+
+            summaryList.innerHTML += `
+                <div class="flex justify-between py-3 mt-2 border-t bg-gray-100 px-2 rounded"><span class="font-bold">จำนวนที่ลูกค้าเขียน</span><span class="font-bold text-gray-700">${ocrExpectedQty}</span></div>
+                <div class="flex justify-between py-3 border-t px-2"><span class="font-bold">จำนวนที่ Checker นับได้</span><span class="font-bold ${colorClass} text-xl">${totalActualPiecesGlobal}</span></div>`;
+            
+            const modalTitle = document.getElementById('confirmModalTitle');
+            if (editingRecordId) {
+                modalTitle.innerHTML = `<i class="fa-solid fa-pen-to-square mr-2"></i>ยืนยันการแก้ไขรายการ`;
+            } else {
+                modalTitle.innerHTML = `<i class="fa-solid fa-list-check mr-2"></i>สรุปรายการก่อนบันทึก`;
+            }
+
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function closeModal() { document.getElementById('confirmModal').classList.add('hidden'); }
+
+        async function confirmSubmit() {
+            closeModal();
+            
+            const pallets = [];
+            document.querySelectorAll('#palletList > div[id^="pallet-item-"]').forEach(item => {
+                const name = item.querySelector('.pallet-name').innerText;
+                const qty = parseInt(item.querySelector('.qty-input').value) || 0;
+                pallets.push({ name, qty });
+            });
+
+            const now = new Date();
+            const dateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+            
+            const payload = {
+                id: editingRecordId ? editingRecordId : null,
+                documentNumber: currentDocNumber,
+                date: dateStr,
+                customer_name: (currentOcrFullData.customer && currentOcrFullData.customer.name) ? currentOcrFullData.customer.name : "ไม่ระบุชื่อ",
+                customer_code: (currentOcrFullData.customer && currentOcrFullData.customer.code) ? currentOcrFullData.customer.code : "N/A",
+                expectedQty: ocrExpectedQty,
+                actualQty: totalActualPiecesGlobal,
+                checkerName: currentUser,
+                palletDetails: pallets,
+                imageBase64: currentImageBase64
+            };
+
+            try {
+                const response = await fetch('/api/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                const resData = await response.json();
+                
+                if (resData.success) {
+                    showCustomAlert('success', editingRecordId ? 'แก้ไขสำเร็จ!' : 'บันทึกสำเร็จ!', resData.message);
+                    resetCheckerApp();
+                } else {
+                    showCustomAlert('warning', 'บันทึกไม่สำเร็จ', resData.message);
+                }
+            } catch (error) {
+                console.error(error);
+                showCustomAlert('warning', 'การเชื่อมต่อผิดพลาด', 'ไม่สามารถเชื่อมต่อระบบฐานข้อมูลได้');
+            }
+        }
+
+        function resetCheckerApp() {
+            editingRecordId = null; 
+            currentOcrFullData = {};
+            const editBanner = document.getElementById('editModeBanner');
+            if (editBanner) editBanner.classList.add('hidden'); 
+
+            const btnSubmit = document.getElementById('btnSubmitData');
+            if(btnSubmit) {
+                btnSubmit.innerHTML = `<i class="fa-solid fa-check-circle mr-2"></i> ตรวจสอบและบันทึก`;
+                btnSubmit.classList.replace('bg-yellow-500', 'bg-green-600');
+                btnSubmit.classList.replace('hover:bg-yellow-600', 'hover:bg-green-700');
+            }
+
+            isOcrScanned = false; ocrExpectedQty = 0; palletCount = 0; currentDocNumber = ""; currentImageBase64 = "";
+
+            document.getElementById('cameraInput').value = "";
+            document.getElementById('ocrBeforeScan').classList.remove('hidden');
+            document.getElementById('ocrAfterScan').classList.add('hidden');
+            document.getElementById('ocrStatusBadge').classList.add('hidden');
+            document.getElementById('btnScanOCR').innerHTML = '<i class="fa-solid fa-camera mr-2"></i> ถ่ายรูป / สแกนใบนำส่ง';
+            document.getElementById('btnScanOCR').classList.remove('opacity-75');
+            
+            const trigger = document.getElementById('customSelectTrigger');
+            if(trigger) {
+                trigger.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+                trigger.classList.remove('bg-white', 'text-gray-800', 'cursor-pointer', 'hover:bg-gray-50');
+            }
+            const triggerText = document.getElementById('customSelectText');
+            if(triggerText) {
+                triggerText.innerText = "-- กรุณาถ่ายรูปใบนำส่งก่อน --";
+                triggerText.classList.remove('text-blue-700', 'font-semibold');
+            }
+            selectedPalletValue = "";
+            const menu = document.getElementById('customSelectMenu');
+            if (menu) menu.classList.add('hidden');
+            const icon = document.getElementById('customSelectIcon');
+            if(icon) icon.classList.remove('rotate-180');
+
+            const btnAdd = document.getElementById('btnAdd');
+            if (btnAdd) {
+                btnAdd.disabled = true; 
+                btnAdd.className = "bg-gray-400 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center cursor-not-allowed";
+            }
+            document.getElementById('palletList').innerHTML = `<div id="emptyState" class="p-8 text-center text-gray-400"><i class="fa-solid fa-clipboard-list text-4xl mb-3"></i><p>รอถ่ายรูปใบนำส่ง และเพิ่มประเภทพาเลท</p></div>`;
+            document.getElementById('totalItems').innerText = `0 รายการ`;
+        }
+
+        // === Checker Edit Logic ===
+        async function editRecord(recordId) {
+            try {
+                const response = await fetch('/api/records');
+                const result = await response.json();
+                if(!result.success) return;
+
+                const record = result.data.find(r => r.id === recordId);
+                if(!record) return;
+
+                editingRecordId = recordId;
+
+                document.getElementById('checkerHistoryPage').classList.add('hidden');
+                document.getElementById('checkerPage').classList.remove('hidden');
+
+                document.getElementById('editModeBanner').classList.remove('hidden');
+                document.getElementById('editModeDocNumber').innerText = record.documentNumber;
+                
+                document.getElementById('btnSubmitData').innerHTML = `<i class="fa-solid fa-floppy-disk mr-2"></i> บันทึกการแก้ไข`;
+                document.getElementById('btnSubmitData').classList.replace('bg-green-600', 'bg-yellow-500');
+                document.getElementById('btnSubmitData').classList.replace('hover:bg-green-700', 'hover:bg-yellow-600');
+
+                isOcrScanned = true;
+                currentDocNumber = record.documentNumber;
+                ocrExpectedQty = record.expectedQty;
+                currentImageBase64 = record.imageBase64;
+                
+                document.getElementById('ocrBeforeScan').classList.add('hidden');
+                document.getElementById('ocrAfterScan').classList.remove('hidden');
+                document.getElementById('ocrStatusBadge').classList.remove('hidden');
+                document.getElementById('previewImage').src = currentImageBase64 || 'https://via.placeholder.com/150x200?text=No+Image';
+                
+                document.getElementById('docNumberText').innerText = currentDocNumber;
+                document.getElementById('expectedTotal').innerText = ocrExpectedQty;
+
+                const trigger = document.getElementById('customSelectTrigger');
+                trigger.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+                trigger.classList.add('bg-white', 'text-gray-800', 'cursor-pointer', 'hover:bg-gray-50');
+                document.getElementById('customSelectText').innerText = "-- ค้นหาและเลือกประเภทพาเลท --";
+                document.getElementById('btnAdd').disabled = false;
+                document.getElementById('btnAdd').className = "bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center transition-colors shadow-sm";
+
+                palletCount = 0;
+                document.getElementById('emptyState').style.display = 'none';
+                document.getElementById('palletList').innerHTML = ''; 
+
+                if(record.palletDetails && record.palletDetails.length > 0) {
+                    record.palletDetails.forEach(p => {
+                        palletCount++;
+                        const itemId = `pallet-item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                        const html = `
+                            <div id="${itemId}" data-name="${p.name}" class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                <div class="flex-1"><h3 class="font-bold text-lg text-blue-800 pallet-name">${p.name}</h3></div>
+                                <div class="flex items-center gap-3">
+                                    <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden h-12 bg-white">
+                                        <button onclick="updateQty('${itemId}', -1)" class="px-4 py-2 bg-gray-100 font-bold border-r h-full active:bg-gray-300"><i class="fa-solid fa-minus"></i></button>
+                                        <input type="number" id="qty-${itemId}" value="${p.qty}" min="1" class="qty-input w-20 text-center font-bold text-xl h-full outline-none">
+                                        <button onclick="updateQty('${itemId}', 1)" class="px-4 py-2 bg-gray-100 font-bold border-l h-full active:bg-gray-300"><i class="fa-solid fa-plus"></i></button>
+                                    </div>
+                                    <button onclick="removeItem('${itemId}')" class="text-red-500 hover:text-red-700 p-3 bg-red-50 rounded-lg"><i class="fa-solid fa-trash-can text-xl"></i></button>
+                                </div>
+                            </div>`;
+                        document.getElementById('palletList').insertAdjacentHTML('beforeend', html);
+                    });
+                }
+                document.getElementById('totalItems').innerText = `${palletCount} รายการ`;
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+
+            } catch (error) {
+                console.error(error);
+                showCustomAlert('warning', 'ผิดพลาด', 'ดึงข้อมูลไม่สำเร็จ');
+            }
+        }
+
+        // === Checker History Page & Date Filter ===
+        function openCheckerHistoryPage() {
+            if(editingRecordId) resetCheckerApp();
+
+            const btnSubmitData = document.getElementById('btnSubmitData');
+            if (btnSubmitData) {
+                btnSubmitData.innerHTML = `<i class="fa-solid fa-check-circle mr-2"></i> ตรวจสอบและบันทึก`;
+                btnSubmitData.classList.replace('bg-yellow-500', 'bg-green-600');
+                btnSubmitData.classList.replace('hover:bg-yellow-600', 'hover:bg-green-700');
+            }
+
+            document.getElementById('checkerPage').classList.add('hidden');
+            document.getElementById('checkerHistoryPage').classList.remove('hidden');
+            
+            const now = new Date();
+            const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+            document.getElementById('checkerDateFilter').value = todayISO;
+
+            renderCheckerHistory();
+        }
+
+        function closeCheckerHistoryPage() {
+            document.getElementById('checkerHistoryPage').classList.add('hidden');
+            document.getElementById('checkerPage').classList.remove('hidden');
+        }
+
+        function clearCheckerDateFilter() {
+            document.getElementById('checkerDateFilter').value = "";
+            renderCheckerHistory();
+        }
+
+        async function renderCheckerHistory() {
+            try {
+                const response = await fetch('/api/records');
+                const result = await response.json();
+                if(!result.success) return;
+
+                const db = result.data;
+                const filterDate = document.getElementById('checkerDateFilter').value; 
+                
+                let myRecords = db.filter(r => r.checkerName === currentUser);
+
+                if (filterDate) {
+                    const [year, month, day] = filterDate.split('-');
+                    const formattedFilter = `${day}/${month}/${year}`;
+                    myRecords = myRecords.filter(r => r.date === formattedFilter);
+                }
+
+                const container = document.getElementById('checkerHistoryContainerList');
+                if(myRecords.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center text-gray-400 py-16 bg-white rounded-xl shadow-sm border border-gray-200">
+                            <i class="fa-solid fa-folder-open text-5xl mb-3 text-gray-300"></i>
+                            <p class="text-lg">ไม่พบประวัติการทำรายการ</p>
+                        </div>`;
+                    return;
+                }
+
+                let html = '';
+                myRecords.forEach(record => {
+                    const isError = record.expectedQty !== record.actualQty;
+                    const bgClass = isError ? 'card-bg-light border-red-200' : 'bg-white border-gray-200';
+                    const statusBadge = isError 
+                        ? `<span class="bg-red-100 text-red-600 px-3 py-1 rounded-full text-xs font-bold shadow-sm">ยอดไม่ตรง</span>` 
+                        : `<span class="bg-green-100 text-green-700 px-3 py-1 rounded-full text-xs font-bold shadow-sm">ยอดตรง</span>`;
+                    
+                    let palletDetailsHtml = '';
+                    if(record.palletDetails && record.palletDetails.length > 0) {
+                        palletDetailsHtml = '<ul class="mt-3 space-y-1.5 border-t border-gray-200 pt-3 bg-gray-50 p-3 rounded-lg">';
+                        record.palletDetails.forEach(p => {
+                            palletDetailsHtml += `
+                                <li class="text-sm flex justify-between text-gray-700 items-center font-medium">
+                                    <span><i class="fa-solid fa-boxes-stacked text-blue-500 mr-2"></i>${p.name}</span>
+                                    <span class="bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold">${p.qty} ตัว</span>
+                                </li>`;
+                        });
+                        palletDetailsHtml += '</ul>';
+                    }
+
+                    const editActionHtml = `<button onclick="editRecord(${record.id})" class="mt-4 w-full bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2.5 rounded-lg transition-colors shadow-sm"><i class="fa-solid fa-pen-to-square mr-2"></i>แก้ไขข้อมูล</button>`;
+
+                    html += `
+                        <div class="${bgClass} rounded-xl p-5 shadow-sm border flex flex-col sm:flex-row gap-5 transition-transform hover:-translate-y-1">
+                            <div class="relative flex-shrink-0 cursor-pointer group sm:w-40" onclick="openImageModal('${record.imageBase64 || ''}')">
+                                <img src="${record.imageBase64 || 'https://via.placeholder.com/150x200?text=No+Image'}" class="w-full h-40 sm:h-full object-cover rounded-lg border border-gray-300 shadow-sm group-hover:brightness-90 transition-all">
+                                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <i class="fa-solid fa-magnifying-glass-plus text-white text-2xl drop-shadow-md"></i>
+                                </div>
+                            </div>
+                            <div class="flex-1 flex flex-col justify-between">
+                                <div>
+                                    <div class="flex justify-between items-start mb-2">
+                                        <h3 class="text-2xl font-extrabold text-blue-900 tracking-tight">${record.documentNumber}</h3>
+                                        ${statusBadge}
+                                    </div>
+                                    <p class="text-sm text-gray-500 mb-3"><i class="fa-regular fa-calendar mr-1"></i> ${record.date}</p>
+                                    
+                                    <div class="grid grid-cols-2 gap-3 text-sm bg-white p-3 rounded-lg border border-gray-200">
+                                        <div class="text-gray-500">ลูกค้าเขียน: <span class="font-bold text-lg text-gray-800 block">${record.expectedQty}</span></div>
+                                        <div class="text-gray-500">นับได้จริง: <span class="font-bold text-lg block ${isError ? 'text-red-600' : 'text-green-600'}">${record.actualQty}</span></div>
+                                    </div>
+                                    
+                                    ${palletDetailsHtml}
+                                </div>
+                                ${editActionHtml}
+                            </div>
+                        </div>`;
+                });
+                container.innerHTML = html;
+            } catch (error) {
+                console.error("โหลดประวัติไม่สำเร็จ", error);
+            }
+        }
+        
+        let adminPollingInterval;
+        // === Admin Dashboard Logic ===
+        function initAdminDashboard() {
+            updateAdminDashboard(); 
+            generateMonthlyReport();
+            // ยกเลิกการตั้งเวลาเก่า (ถ้ามี) เพื่อป้องกันการทำงานซ้อนกัน
+            if (adminPollingInterval) clearInterval(adminPollingInterval);
+            
+            // ตั้งเวลาให้ดึงข้อมูลจาก API ใหม่ทุกๆ 5 วินาที (5000 ms)
+            adminPollingInterval = setInterval(() => {
+                // เช็คว่าเปิดแท็บ "Monitor วันนี้" หรือ "Report รายเดือน" อยู่
+                const isDailyView = !document.getElementById('adminDailyView').classList.contains('hidden');
+                
+                if (isDailyView) {
+                    updateAdminDashboard(); // อัปเดตหน้า Monitor
+                } else {
+                    generateMonthlyReport(); // อัปเดตหน้า Report
+                }
+            }, 3000);
+        }
+
+        function switchAdminTab(tabName) {
+            const btnDaily = document.getElementById('tabDaily');
+            const btnMonthly = document.getElementById('tabMonthly');
+            const viewDaily = document.getElementById('adminDailyView');
+            const viewMonthly = document.getElementById('adminMonthlyView');
+
+            if (tabName === 'daily') {
+                btnDaily.className = "px-6 py-3 font-bold text-blue-600 border-b-4 border-blue-600 transition-colors";
+                btnMonthly.className = "px-6 py-3 font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-colors";
+                viewDaily.classList.remove('hidden');
+                viewMonthly.classList.add('hidden');
+                updateAdminDashboard();
+            } else {
+                btnMonthly.className = "px-6 py-3 font-bold text-blue-600 border-b-4 border-blue-600 transition-colors";
+                btnDaily.className = "px-6 py-3 font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-colors";
+                viewMonthly.classList.remove('hidden');
+                viewDaily.classList.add('hidden');
+                generateMonthlyReport();
+            }
+        }
+
+        function playSirenAlert() {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+            osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.2);
+            osc.frequency.setValueAtTime(600, audioCtx.currentTime + 0.4);
+            osc.frequency.setValueAtTime(900, audioCtx.currentTime + 0.6);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 1.0);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 1.0);
+        }
+
+        
+        // --- สถานะการกรองของหน้า Daily ---
+        let isDailyDiscrepancyFilterOn = false;
+
+        function toggleDiscrepancyFilter() {
+            isDailyDiscrepancyFilterOn = true;
+            updateAdminDashboard(); // โหลดตารางใหม่ทันทีที่กด
+        }
+
+        function clearDiscrepancyFilter() {
+            isDailyDiscrepancyFilterOn = false;
+            updateAdminDashboard(); // โหลดตารางใหม่
+        }
+
+        // --- Daily View (อัปเดตตาราง) ---
+        async function updateAdminDashboard() {
+            try {
+                const response = await fetch('/api/records');
+                const result = await response.json();
+                
+                if (!result.success) return;
+                
+                let db = result.data; 
+                
+                // อ่านค่าวันที่จาก DatePicker ถ้ามี ถ้าไม่มีให้ใช้วันนี้
+                const datePicker = document.getElementById('adminDatePicker');
+                let targetDateStr = "";
+                
+                if (datePicker && datePicker.value) {
+                    const [year, month, day] = datePicker.value.split('-');
+                    targetDateStr = `${day}/${month}/${year}`;
+                } else {
+                    const now = new Date();
+                    targetDateStr = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+                }
+                
+                let todayRecords = db.filter(r => r.date && r.date.includes(targetDateStr));
+                
+                // --- คำนวณสถิติ 3 ค่าใหม่ ---
+                const totalExpected = todayRecords.reduce((sum, r) => sum + r.expectedQty, 0);
+                const totalActual = todayRecords.reduce((sum, r) => sum + r.actualQty, 0);
+                const totalDiff = totalActual - totalExpected;
+
+                const statExpected = document.getElementById('adminStatExpected');
+                if (statExpected) statExpected.innerText = totalExpected;
+
+                const statActual = document.getElementById('adminStatActual');
+                if (statActual) statActual.innerText = totalActual;
+
+                const statDiff = document.getElementById('adminStatDiff');
+                if (statDiff) {
+                    statDiff.innerText = totalDiff > 0 ? `+${totalDiff}` : totalDiff;
+                    // เปลี่ยนสีตัวเลข diff อัตโนมัติ (ไม่ตรง=แดง, ตรง=เทา)
+                    statDiff.className = totalDiff !== 0 ? "text-xl font-bold text-red-600" : "text-xl font-bold text-gray-500";
+                }
+
+                // กล่องยอดไม่ตรง
+                const statDiscrepancy = document.getElementById('adminStatDiscrepancy');
+                if (statDiscrepancy) statDiscrepancy.innerText = todayRecords.filter(r => r.expectedQty !== r.actualQty).length;
+
+                // --- กรองข้อมูลถ้าผู้ใช้กดกล่อง "ยอดไม่ตรง" ---
+                const btnClearFilter = document.getElementById('btnClearDailyFilter');
+                if (isDailyDiscrepancyFilterOn) {
+                    todayRecords = todayRecords.filter(r => r.expectedQty !== r.actualQty);
+                    if (btnClearFilter) btnClearFilter.classList.remove('hidden');
+                } else {
+                    if (btnClearFilter) btnClearFilter.classList.add('hidden');
+                }
+
+                // --- สร้างตาราง ---
+                const tableBody = document.getElementById('adminRecordTableBody');
+                if(todayRecords.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="10" class="text-center text-gray-500 py-10 text-lg">${isDailyDiscrepancyFilterOn ? 'ไม่พบบิลที่ยอดไม่ตรง' : `ไม่พบข้อมูลของวันที่ ${targetDateStr}`}</td></tr>`;
+                    return;
+                }
+
+                let html = '';
+                todayRecords.forEach(record => {
+                    const isDiscrepancy = record.expectedQty !== record.actualQty;
+                    const statusColor = isDiscrepancy ? 'text-red-600 font-bold bg-red-50' : 'text-green-600 font-bold';
+                    
+                    const diffValue = record.actualQty - record.expectedQty;
+                    const diffText = diffValue > 0 ? `+${diffValue}` : diffValue;
+                    const diffColor = diffValue !== 0 ? 'text-red-600 font-bold' : 'text-gray-400';
+                    
+                    let palletItemsHtml = '-';
+                    if (record.palletDetails && record.palletDetails.length > 0) {
+                        palletItemsHtml = `
+                        <table class="w-full text-xs text-left border border-gray-200 rounded overflow-hidden">
+                            <tbody class="divide-y divide-gray-100">
+                                ${record.palletDetails.map(p => `
+                                    <tr class="bg-gray-50 hover:bg-gray-100">
+                                        <td class="px-2 py-1 text-gray-700 w-3/4">${p.name}</td>
+                                        <td class="px-2 py-1 font-bold text-blue-700 text-right w-1/4 border-l border-gray-100">${p.qty}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>`;
+                    }
+
+                    html += `
+                        <tr class="hover:bg-blue-50 transition-colors border-b border-gray-100">
+                            <td class="px-4 py-3 font-bold text-gray-800">${record.documentNumber}</td>
+                            <td class="px-4 py-3 text-sm">${record.date}</td>
+                            <td class="px-4 py-3 truncate max-w-xs text-sm" title="${record.customer_name}">${record.customer_name}</td>
+                            <td class="px-4 py-3 text-sm">${record.customer_code || '-'}</td>
+                            <td class="px-4 py-3 text-center text-sm">${record.checkerName}</td>
+                            <td class="px-4 py-3 text-right">${record.expectedQty}</td>
+                            <td class="px-4 py-3 text-right ${statusColor}">${record.actualQty}</td>
+                            <td class="px-4 py-3 text-center ${diffColor}">${diffText}</td>
+                            <td class="px-4 py-2">${palletItemsHtml}</td>
+                            <td class="px-4 py-3 text-center">
+                                <button onclick="openImageModal('${record.imageBase64 || ''}')" class="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition-colors" title="ดูรูปภาพ">
+                                    <i class="fa-solid fa-image"></i>
+                                </button>
+                            </td>
+                        </tr>`;
+                });
+                tableBody.innerHTML = html;
+
+            } catch (error) {
+                console.error("ไม่สามารถโหลดข้อมูล Admin Dashboard ได้:", error);
+            }
+        }
+        
+        // --- Monthly View (อัปเดตตาราง) ---
+        async function generateMonthlyReport() {
+            try {
+                const response = await fetch('/api/records');
+                const result = await response.json();
+                
+                if (!result.success) return;
+                
+                const db = result.data;
+                const selectedMonthStr = document.getElementById('reportMonthPicker').value; 
+                
+                const monthlyRecords = db.filter(r => {
+                    if (r.date) {
+                        const parts = r.date.split('/'); // DD/MM/YYYY
+                        if(parts.length === 3) {
+                            return `${parts[2]}-${parts[1]}` === selectedMonthStr;
+                        }
+                    }
+                    return false;
+                });
+
+                const totalBills = monthlyRecords.length;
+                const totalPallets = monthlyRecords.reduce((sum, r) => sum + r.actualQty, 0);
+                const discrepancyBills = monthlyRecords.filter(r => r.expectedQty !== r.actualQty).length;
+                
+                let palletDiff = 0;
+                monthlyRecords.forEach(r => {
+                    if(r.expectedQty !== r.actualQty) {
+                        palletDiff += (r.actualQty - r.expectedQty); // เปลี่ยนวิธีหาผลรวม diff ให้สอดคล้องกับ actual-expected
+                    }
+                });
+
+                document.getElementById('monthlyTotalBills').innerText = totalBills;
+                document.getElementById('monthlyTotalPallets').innerText = totalPallets;
+                document.getElementById('monthlyDiscrepancyBills').innerText = discrepancyBills;
+                document.getElementById('monthlyPalletDiff').innerText = palletDiff > 0 ? `+${palletDiff}` : palletDiff;
+
+                const tableBody = document.getElementById('monthlyRecordTableBody');
+                if(monthlyRecords.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลในเดือนที่เลือก</td></tr>';
+                    return;
+                }
+
+                let html = '';
+                monthlyRecords.forEach(record => {
+                    const isDiscrepancy = record.expectedQty !== record.actualQty;
+                    const statusColor = isDiscrepancy ? 'text-red-600 font-bold bg-red-50' : 'text-green-600 font-bold';
+                    
+                    // คำนวณ Diff (Actual - Expected)
+                    const diffValue = record.actualQty - record.expectedQty;
+                    const diffText = diffValue > 0 ? `+${diffValue}` : diffValue;
+                    const diffColor = diffValue !== 0 ? 'text-red-600 font-bold' : 'text-gray-400';
+                    
+                    // สร้างตารางย่อย (Nested Table) สำหรับแสดงรายละเอียดพาเลท
+                    let palletItemsHtml = '-';
+                    if (record.palletDetails && record.palletDetails.length > 0) {
+                        palletItemsHtml = `
+                        <table class="w-full text-xs text-left border border-gray-200 rounded overflow-hidden">
+                            <tbody class="divide-y divide-gray-100">
+                                ${record.palletDetails.map(p => `
+                                    <tr class="bg-gray-50 hover:bg-gray-100">
+                                        <td class="px-2 py-1 text-gray-700 w-3/4">${p.name}</td>
+                                        <td class="px-2 py-1 font-bold text-blue-700 text-right w-1/4 border-l border-gray-100">${p.qty}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>`;
+                    }
+
+                    html += `
+                        <tr class="hover:bg-blue-50 transition-colors border-b border-gray-100">
+                            <td class="px-4 py-3 font-bold text-gray-800">${record.documentNumber}</td>
+                            <td class="px-4 py-3 text-sm">${record.date}</td>
+                            <td class="px-4 py-3 truncate max-w-xs text-sm" title="${record.customer_name}">${record.customer_name}</td>
+                            <td class="px-4 py-3 text-sm">${record.customer_code || '-'}</td>
+                            <td class="px-4 py-3 text-center text-sm">${record.checkerName}</td>
+                            <td class="px-4 py-3 text-right">${record.expectedQty}</td>
+                            <td class="px-4 py-3 text-right ${statusColor}">${record.actualQty}</td>
+                            <td class="px-4 py-3 text-center ${diffColor}">${diffText}</td>
+                            <td class="px-4 py-2">${palletItemsHtml}</td>
+                            <td class="px-4 py-3 text-center">
+                                <button onclick="openImageModal('${record.imageBase64 || ''}')" class="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition-colors" title="ดูรูปภาพ">
+                                    <i class="fa-solid fa-image"></i>
+                                </button>
+                            </td>
+                        </tr>`;
+                });
+                tableBody.innerHTML = html;
+
+            } catch (error) {
+                console.error("ไม่สามารถโหลดรายงานรายเดือนได้:", error);
+            }
+        }
+
+        // === Image Viewer Modal ===
+        function openImageModal(imgSrc) {
+            if (!imgSrc) return;
+            const modal = document.getElementById('imageViewerModal');
+            const fullImg = document.getElementById('fullSizeImage');
+            fullImg.src = imgSrc;
+            modal.classList.remove('hidden');
+            setTimeout(() => {
+                fullImg.classList.remove('scale-95');
+                fullImg.classList.add('scale-100');
+            }, 10);
+        }
+
+        function closeImageModal() {
+            const modal = document.getElementById('imageViewerModal');
+            const fullImg = document.getElementById('fullSizeImage');
+            fullImg.classList.remove('scale-100');
+            fullImg.classList.add('scale-95');
+            setTimeout(() => {
+                modal.classList.add('hidden');
+                fullImg.src = '';
+            }, 300);
+        }
+
+        async function clearDatabase() {
+            if(confirm("คำเตือน: คุณต้องการล้างข้อมูลประวัติการรับพาเลททั้งหมดใช่หรือไม่? (การกระทำนี้จะลบข้อมูลออกจากฐานข้อมูลจริงและไม่สามารถกู้คืนได้)")) {
+                try {
+                    const response = await fetch('/api/clear', { method: 'DELETE' });
+                    const result = await response.json();
+                    
+                    if(result.success) {
+                        updateAdminDashboard();
+                        generateMonthlyReport();
+                        showCustomAlert('success', 'ล้างข้อมูลสำเร็จ', 'ลบประวัติในฐานข้อมูลระบบเรียบร้อยแล้ว');
+                    } else {
+                        showCustomAlert('warning', 'เกิดข้อผิดพลาด', result.message);
+                    }
+                } catch(e) {
+                    showCustomAlert('warning', 'การเชื่อมต่อผิดพลาด', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
+                }
+            }
+        }
+
+        // === Alerts ===
+        function showCustomAlert(type, title, message) {
+            const modal = document.getElementById('customAlertModal');
+            const icon = document.getElementById('alertIcon');
+            const titleEl = document.getElementById('alertTitle');
+            const messageEl = document.getElementById('alertMessage');
+            const btn = document.getElementById('alertButton');
+
+            titleEl.innerText = title; messageEl.innerText = message;
+
+            if (type === 'warning') {
+                icon.innerHTML = '<i class="fa-solid fa-circle-exclamation text-red-500"></i>';
+                btn.className = 'w-full text-white py-3 rounded-lg font-bold text-lg transition-colors shadow-sm bg-red-600 hover:bg-red-700';
+            } else if (type === 'info') {
+                icon.innerHTML = '<i class="fa-solid fa-circle-info text-blue-500"></i>';
+                btn.className = 'w-full text-white py-3 rounded-lg font-bold text-lg transition-colors shadow-sm bg-blue-600 hover:bg-blue-700';
+            } else if (type === 'success') {
+                icon.innerHTML = '<i class="fa-solid fa-circle-check text-green-500"></i>';
+                btn.className = 'w-full text-white py-3 rounded-lg font-bold text-lg transition-colors shadow-sm bg-green-600 hover:bg-green-700';
+            }
+            modal.classList.remove('hidden');
+        }
+        
+        function closeAlert() { 
+            document.getElementById('customAlertModal').classList.add('hidden'); 
+        }
+    </script>
+</body>
+</html>
