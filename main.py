@@ -6,7 +6,6 @@ from PIL import Image, ImageOps
 import json
 import os
 import shutil
-import sqlite3
 import google.generativeai as genai
 from dotenv import load_dotenv
 import pandas as pd
@@ -20,7 +19,20 @@ import base64
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 
-DB_NAME = "database/receipts4.db"
+# --- เพิ่ม Library สำหรับ PostgreSQL ---
+import psycopg2
+import psycopg2.extras
+from sqlalchemy import create_engine
+
+load_dotenv()
+
+# ดึง URL ของ Database จาก Environment Variable (รองรับทั้ง SQLAlchemy และ psycopg2)
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
+# SQLAlchemy มักต้องการให้ขึ้นต้นด้วย postgresql://
+SQLALCHEMY_DB_URL = DATABASE_URL.replace("postgres://", "postgresql://")
+
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL)
 
 def four_point_transform(image, pts):
     rect = np.array([
@@ -94,13 +106,13 @@ class TruckImageCreate(BaseModel):
     operator_name: Optional[str] = "SCALE"
 
 def init_db():
-    os.makedirs("database", exist_ok=True)
-    conn = sqlite3.connect(DB_NAME)
+    conn = get_db_connection()
     cursor = conn.cursor()
     
+    # เปลี่ยน AUTOINCREMENT เป็น SERIAL สำหรับ PostgreSQL
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS receipt_data (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             document_no TEXT,
             date TEXT,
             customer_name TEXT,
@@ -116,7 +128,7 @@ def init_db():
     
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS truck_scale_images (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id SERIAL PRIMARY KEY,
             license_plate TEXT,
             image_base64 TEXT,
             truck_weighing_key TEXT, 
@@ -125,15 +137,18 @@ def init_db():
         )
     ''')
     
+    # ใช้ IF NOT EXISTS ได้เลยใน PostgreSQL
     try:
-        cursor.execute("ALTER TABLE truck_scale_images ADD COLUMN truck_weighing_key TEXT")
-    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE truck_scale_images ADD COLUMN IF NOT EXISTS truck_weighing_key TEXT")
+    except Exception:
+        conn.rollback()
         pass 
     
     conn.commit()
     conn.close()
 
-init_db()
+if DATABASE_URL:
+    init_db()
 
 def load_master_data():
     pallet_file = "database/truckscale/MasterData_Pallet.xlsx"
@@ -141,10 +156,12 @@ def load_master_data():
     if os.path.exists(pallet_file) and os.path.exists(plant_file):
         df_pallet = pd.read_excel(pallet_file)
         df_plant = pd.read_excel(plant_file)
-        conn = sqlite3.connect(DB_NAME)
-        df_pallet.to_sql('master_pallet', conn, if_exists='replace', index=False)
-        df_plant.to_sql('master_plant', conn, if_exists='replace', index=False)
-        conn.close()
+        
+        # ใช้ SQLAlchemy Engine สำหรับ Pandas .to_sql()
+        engine = create_engine(SQLALCHEMY_DB_URL)
+        df_pallet.to_sql('master_pallet', engine, if_exists='replace', index=False)
+        df_plant.to_sql('master_plant', engine, if_exists='replace', index=False)
+        engine.dispose()
         print("✅ โหลด Master Data (Plant, Pallet) เสร็จสมบูรณ์")
 
 def load_transaction_data():
@@ -154,10 +171,11 @@ def load_transaction_data():
         if os.path.exists(delivery_file) and os.path.exists(weighing_file):
             df_delivery = pd.read_excel(delivery_file)
             df_weighing = pd.read_excel(weighing_file)
-            conn = sqlite3.connect(DB_NAME)
-            df_delivery.to_sql('pallet_delivery', conn, if_exists='replace', index=False)
-            df_weighing.to_sql('truck_weighing', conn, if_exists='replace', index=False)
-            conn.close()
+            
+            engine = create_engine(SQLALCHEMY_DB_URL)
+            df_delivery.to_sql('pallet_delivery', engine, if_exists='replace', index=False)
+            df_weighing.to_sql('truck_weighing', engine, if_exists='replace', index=False)
+            engine.dispose()
             print("🔄 [อัปเดตอัตโนมัติ] ข้อมูลรถบรรทุกล่าสุดถูกโหลดเข้า Database แล้ว!")
             
             if loop and loop.is_running():
@@ -173,12 +191,13 @@ class ExcelFileHandler(FileSystemEventHandler):
                 time.sleep(1) 
                 load_transaction_data()
 
-load_master_data()
-load_transaction_data()
+if DATABASE_URL:
+    load_master_data()
+    load_transaction_data()
 
-load_dotenv()
 API_KEY = os.getenv("GEMINI_API_KEY")
-genai.configure(api_key=API_KEY)
+if API_KEY:
+    genai.configure(api_key=API_KEY)
 
 app = FastAPI()
 
@@ -377,21 +396,22 @@ async def upload_image(file: UploadFile = File(...), points: Optional[str] = For
 @app.post("/api/save")
 async def save_record(record: RecordCreate):
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         cursor = conn.cursor()
         pallet_details_json = json.dumps([p.dict() for p in record.palletDetails], ensure_ascii=False)
         
+        # เปลี่ยน ? เป็น %s
         if record.id:
             cursor.execute('''
                 UPDATE receipt_data 
-                SET document_no=?, date=?, customer_name=?, customer_code=?, 
-                    expected_qty=?, actual_qty=?, checker_name=?, pallet_details=?, image_base64=?, plant_short_name=?
-                WHERE id=?
+                SET document_no=%s, date=%s, customer_name=%s, customer_code=%s, 
+                    expected_qty=%s, actual_qty=%s, checker_name=%s, pallet_details=%s, image_base64=%s, plant_short_name=%s
+                WHERE id=%s
             ''', (record.documentNumber, record.date, record.customer_name, record.customer_code, record.expectedQty, record.actualQty, record.checkerName, pallet_details_json, record.imageBase64, record.plant_short_name, record.id))
         else:
             cursor.execute('''
                 INSERT INTO receipt_data (document_no, date, customer_name, customer_code, expected_qty, actual_qty, checker_name, pallet_details, image_base64, plant_short_name) 
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ''', (record.documentNumber, record.date, record.customer_name, record.customer_code, record.expectedQty, record.actualQty, record.checkerName, pallet_details_json, record.imageBase64, record.plant_short_name))
         
         conn.commit()
@@ -410,15 +430,16 @@ async def save_truck_image(payload: TruckImageCreate):
         if not payload.image_base64:
             return {"success": False, "message": "ไม่พบข้อมูลรูปภาพ"}
 
-        conn = sqlite3.connect(DB_NAME)
-        conn.row_factory = sqlite3.Row
-        cursor = conn.cursor()
+        conn = get_db_connection()
+        # ใช้ DictCursor แทน sqlite3.Row
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
+        # เพิ่มการป้องกัน Type Error ด้วย CAST(... AS TEXT) ใน PostgreSQL
         cursor.execute('''
             SELECT row_key 
             FROM truck_weighing 
-            WHERE REPLACE(carRegister, ' ', '') = ?
-              AND (weightOut IS NULL OR weightOut = 0 OR weightOut = '' OR weightOutTime IS NULL OR weightOutTime = '' OR weightOutTime = '-')
+            WHERE REPLACE(CAST(carRegister AS TEXT), ' ', '') = %s
+              AND (weightOut IS NULL OR CAST(weightOut AS TEXT) = '0' OR CAST(weightOut AS TEXT) = '' OR weightOutTime IS NULL OR CAST(weightOutTime AS TEXT) = '' OR CAST(weightOutTime AS TEXT) = '-')
             ORDER BY row_key DESC 
             LIMIT 1
         ''', (clean_plate,))
@@ -438,7 +459,7 @@ async def save_truck_image(payload: TruckImageCreate):
 
         cursor.execute('''
             INSERT INTO truck_scale_images (license_plate, image_base64, truck_weighing_key, operator_name, created_at)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
         ''', (clean_plate, payload.image_base64, truck_row_key, payload.operator_name, created_at))
 
         conn.commit()
@@ -451,56 +472,58 @@ async def save_truck_image(payload: TruckImageCreate):
 
 @app.get("/api/records")
 async def get_records():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    cursor.execute("""
-        SELECT r.*, 
-               truck.carRegister as license_plate, 
-               truck.weightInTime as weight_in_time, 
-               truck.weightIn as weight_in, 
-               truck.weightOutTime as weight_out_time, 
-               truck.weightOut as weight_out,
-               timg.image_base64 as truck_image_base64
-        FROM receipt_data r
-        LEFT JOIN pallet_delivery delivery ON r.document_no = delivery.receiptNumber
-        LEFT JOIN truck_weighing truck ON delivery.truckWeighingKey = truck.row_key
-        LEFT JOIN truck_scale_images timg ON truck.row_key = timg.truck_weighing_key
-        ORDER BY r.id DESC
-    """)
-    rows = cursor.fetchall()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        
+        cursor.execute("""
+            SELECT r.*, 
+                   truck.carRegister as license_plate, 
+                   truck.weightInTime as weight_in_time, 
+                   truck.weightIn as weight_in, 
+                   truck.weightOutTime as weight_out_time, 
+                   truck.weightOut as weight_out,
+                   timg.image_base64 as truck_image_base64
+            FROM receipt_data r
+            LEFT JOIN pallet_delivery delivery ON r.document_no = delivery.receiptNumber
+            LEFT JOIN truck_weighing truck ON delivery.truckWeighingKey = truck.row_key
+            LEFT JOIN truck_scale_images timg ON truck.row_key = timg.truck_weighing_key
+            ORDER BY r.id DESC
+        """)
+        rows = cursor.fetchall()
+        conn.close()
 
-    records = []
-    for row in rows:
-        records.append({
-            "id": row["id"],
-            "documentNumber": row["document_no"],
-            "date": row["date"],
-            "customer_name": row["customer_name"],
-            "customer_code": row["customer_code"],
-            "expectedQty": row["expected_qty"],
-            "actualQty": row["actual_qty"],
-            "checkerName": row["checker_name"],
-            "palletDetails": json.loads(row["pallet_details"]) if row["pallet_details"] else [],
-            "imageBase64": row["image_base64"],
-            "plant_short_name": row["plant_short_name"],
-            "truckDetail": {
-                "license_plate": row["license_plate"] or "-",
-                "weight_in_time": row["weight_in_time"] or "-",
-                "weight_in": row["weight_in"] or 0,
-                "weight_out_time": row["weight_out_time"] or "รอรถออก",
-                "weight_out": row["weight_out"] or 0,
-                "truck_image_base64": row["truck_image_base64"] or None
-            }
-        })
-    return {"success": True, "data": records}
+        records = []
+        for row in rows:
+            records.append({
+                "id": row["id"],
+                "documentNumber": row["document_no"],
+                "date": row["date"],
+                "customer_name": row["customer_name"],
+                "customer_code": row["customer_code"],
+                "expectedQty": row["expected_qty"],
+                "actualQty": row["actual_qty"],
+                "checkerName": row["checker_name"],
+                "palletDetails": json.loads(row["pallet_details"]) if row["pallet_details"] else [],
+                "imageBase64": row["image_base64"],
+                "plant_short_name": row["plant_short_name"],
+                "truckDetail": {
+                    "license_plate": row["license_plate"] or "-",
+                    "weight_in_time": row["weight_in_time"] or "-",
+                    "weight_in": row["weight_in"] or 0,
+                    "weight_out_time": row["weight_out_time"] or "รอรถออก",
+                    "weight_out": row["weight_out"] or 0,
+                    "truck_image_base64": row["truck_image_base64"] or None
+                }
+            })
+        return {"success": True, "data": records}
+    except Exception as e:
+        return {"success": False, "message": str(e)}
 
 @app.delete("/api/clear")
 async def clear_db():
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute("DELETE FROM receipt_data")
         cursor.execute("DELETE FROM truck_scale_images")
@@ -514,13 +537,13 @@ async def clear_db():
 @app.get("/api/pallets/{plant_short_name}")
 async def get_pallets_by_plant(plant_short_name: str):
     try:
-        conn = sqlite3.connect(DB_NAME)
+        conn = get_db_connection()
         cursor = conn.cursor()
         sql = """
             SELECT pallet.name || ' - ' || pallet.code 
             FROM master_pallet as pallet
             INNER JOIN master_plant as plant ON pallet.plantId = plant.row_key
-            WHERE plant.shortName = ?
+            WHERE plant.shortName = %s
         """
         cursor.execute(sql, (plant_short_name,))
         rows = cursor.fetchall()

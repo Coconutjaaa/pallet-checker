@@ -12,3 +12,5 @@ watchdog
 websockets
 opencv-python-headless
 numpy
+psycopg2-binary
+SQLAlchemy
