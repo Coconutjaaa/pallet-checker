@@ -642,7 +642,7 @@
         let isSessionExpired = false;
 
         async function fetchWithAuth(url, options = {}) {
-            const token = localStorage.getItem("access_token");
+            const token = sessionStorage.getItem("access_token");
             const headers = { ...options.headers };
             
             if (token && token !== "undefined" && token !== "null") {
@@ -653,19 +653,23 @@
 
             const response = await fetch(url, { ...options, headers });
 
-            if (response.status === 401 || response.status === 403) {
+            if (response.status === 401) {
                 if (!isSessionExpired) {
                     isSessionExpired = true; 
                     handleLogout();
-                    
-                    const resData = await response.json().catch(() => ({}));
-                    if (resData.detail === "บัญชีของคุณกำลังรอ Admin อนุมัติการเข้าใช้งาน") {
-                        showCustomAlert('warning', 'รอการอนุมัติ', resData.detail);
-                    } else {
-                        showCustomAlert('warning', 'เซสชันหมดอายุ', 'กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
-                    }
+                    showCustomAlert('warning', 'เซสชันหมดอายุ', 'กรุณาเข้าสู่ระบบใหม่อีกครั้ง');
                 }
                 throw new Error("Unauthorized");
+            } 
+            else if (response.status === 403) {
+                const resData = await response.json().catch(() => ({}));
+                if (resData.detail === "บัญชีของคุณกำลังรอ Admin อนุมัติการเข้าใช้งาน") {
+                    handleLogout();
+                    showCustomAlert('warning', 'รอการอนุมัติ', resData.detail);
+                } else {
+                    showCustomAlert('warning', 'ไม่มีสิทธิ์เข้าถึง', 'คุณไม่มีสิทธิ์ใช้งานในส่วนนี้ (อาจเกิดจากสลับ User)');
+                }
+                throw new Error("Forbidden");
             }
             return response;
         }
@@ -794,7 +798,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    localStorage.setItem("access_token", data.access_token);
+                    sessionStorage.setItem("access_token", data.access_token);
                     isSessionExpired = false;
                     
                     if(!audioCtx) {
@@ -839,7 +843,7 @@
                 adminWs.close();
                 adminWs = null;
             }
-            localStorage.removeItem("access_token");
+            sessionStorage.removeItem("access_token");
             currentUser = "";
 
             executeRetakeImage(); 
@@ -1773,7 +1777,7 @@
         }
         
         function initAdminDashboard() {
-            if(!localStorage.getItem("access_token")) return;
+            if(!sessionStorage.getItem("access_token")) return;
 
             updateAdminDashboard(); 
             generateMonthlyReport();
@@ -1784,7 +1788,7 @@
                 
                 adminWs.onmessage = async function(event) {
                     if (event.data === "UPDATE") {
-                        if(localStorage.getItem("access_token")){
+                        if(sessionStorage.getItem("access_token")){
                             console.log("ได้รับสัญญาณอัปเดตจากเซิร์ฟเวอร์! ดึงข้อมูลล่าสุด...");
                             await updateAdminDashboard();
                             generateMonthlyReport();
@@ -1794,7 +1798,7 @@
                 };
 
                 adminWs.onclose = function() {
-                    if(localStorage.getItem("access_token")){
+                    if(sessionStorage.getItem("access_token")){
                         console.log("WebSocket ตัดการเชื่อมต่อ... จะลองต่อใหม่ใน 5 วินาที");
                         setTimeout(initAdminDashboard, 3000);
                     }
