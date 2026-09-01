@@ -38,6 +38,8 @@ class UserCreate(BaseModel):
     username: str
     password: str
     role: str
+    first_name: str
+    last_name: str
 
 @router.post("/register")
 async def register(user: UserCreate):
@@ -45,7 +47,7 @@ async def register(user: UserCreate):
     cursor = conn.cursor()
     
     # 1. เช็คว่ามี username นี้ซ้ำหรือไม่
-    cursor.execute("SELECT username FROM users WHERE username = %s", (user.username.upper(),))
+    cursor.execute("SELECT username FROM users WHERE username = %s", (user.username,))
     if cursor.fetchone():
         conn.close()
         raise HTTPException(status_code=400, detail="Username นี้มีอยู่ในระบบแล้ว")
@@ -56,8 +58,8 @@ async def register(user: UserCreate):
     # 3. บันทึกลงตาราง users
     try:
         cursor.execute(
-            "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s)",
-            (user.username.upper(), hashed_pwd, user.role.upper())
+            "INSERT INTO users (username, password_hash, role, first_name, last_name) VALUES (%s, %s, %s, %s, %s)",
+            (user.username, hashed_pwd, user.role.upper(), user.first_name, user.last_name)
         )
         conn.commit()
     except Exception as e:
@@ -66,7 +68,7 @@ async def register(user: UserCreate):
     finally:
         conn.close()
         
-    return {"message": f"สร้างผู้ใช้ {user.username.upper()} สิทธิ์ {user.role.upper()} สำเร็จ!"}
+    return {"message": f"สร้างผู้ใช้ {user.username} สิทธิ์ {user.role.upper()} สำเร็จ!"}
 
 @router.post("/login")
 async def login(form_data: OAuth2PasswordRequestForm = Depends()):
@@ -74,7 +76,7 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
     cursor = conn.cursor()
     
     # ค้นหา user จากฐานข้อมูล
-    cursor.execute("SELECT username, password_hash, role, is_approved FROM users WHERE username = %s", (form_data.username.upper(),))
+    cursor.execute("SELECT username, password_hash, role, is_approved FROM users WHERE username = %s", (form_data.username,))
     user = cursor.fetchone()
     conn.close()
 

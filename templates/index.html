@@ -48,7 +48,7 @@
                     <label class="block text-gray-700 font-medium mb-2">รหัสพนักงาน</label>
                     <div class="relative">
                         <i class="fa-solid fa-user absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
-                        <input type="text" id="userId" placeholder="เช่น ADMIN, SCALE-01, CHK-001" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow uppercase">
+                        <input type="text" id="userId" placeholder="เช่น ADMIN, SCALE-01, CHK-001" class="w-full pl-10 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none transition-shadow">
                     </div>
                 </div>
                 <div>
@@ -75,7 +75,7 @@
             <div id="registerSection" class="space-y-4 hidden animate-fade-in">
                 <div>
                     <label class="block text-gray-700 font-medium mb-1">รหัสพนักงานใหม่</label>
-                    <input type="text" id="regUserId" placeholder="เช่น CHK-002" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none uppercase">
+                    <input type="text" id="regUserId" placeholder="เช่น CHK-002" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
                 </div>
                 <div>
                     <label class="block text-gray-700 font-medium mb-1">ตำแหน่ง (สิทธิ์การใช้งาน)</label>
@@ -83,6 +83,16 @@
                         <option value="CHECKER">พนักงานตรวจพาเลท (Checker)</option>
                         <option value="SCALE">พนักงานห้องชั่ง (Scale)</option>
                     </select>
+                </div>
+                <div class="flex gap-3">
+                    <div class="flex-1">
+                        <label class="block text-gray-700 font-medium mb-1">ชื่อจริง</label>
+                        <input type="text" id="regFirstName" placeholder="ชื่อ" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
+                    <div class="flex-1">
+                        <label class="block text-gray-700 font-medium mb-1">นามสกุล</label>
+                        <input type="text" id="regLastName" placeholder="นามสกุล" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                    </div>
                 </div>
                 <div>
                     <label class="block text-gray-700 font-medium mb-1">ตั้งรหัสผ่าน</label>
@@ -751,12 +761,14 @@
         }
 
         async function handleRegister() {
-            const userId = document.getElementById('regUserId').value.trim().toUpperCase();
+            const userId = document.getElementById('regUserId').value.trim();
             const password = document.getElementById('regPassword').value;
             const confirmPassword = document.getElementById('regConfirmPassword').value;
             const role = document.getElementById('regRole').value;
+            const firstName = document.getElementById('regFirstName').value.trim();
+            const lastName = document.getElementById('regLastName').value.trim();
 
-            if(!userId || !password || !confirmPassword)  { 
+            if(!userId || !password || !confirmPassword || !firstName || !lastName)  { 
                 showCustomAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณากรอกรหัสพนักงานและรหัสผ่าน'); 
                 return; 
             }
@@ -785,7 +797,9 @@
                     body: JSON.stringify({
                         username: userId,
                         password: password,
-                        role: role
+                        role: role,
+                        first_name: firstName,
+                        last_name: lastName 
                     })
                 });
                 
@@ -796,6 +810,8 @@
                     document.getElementById('regUserId').value = '';
                     document.getElementById('regPassword').value = '';
                     document.getElementById('regConfirmPassword').value = '';
+                    document.getElementById('regFirstName').value = '';
+                    document.getElementById('regLastName').value = '';
                     toggleAuthMode();
                 } else {
                     showCustomAlert('warning', 'ไม่สามารถสมัครได้', data.detail || 'เกิดข้อผิดพลาดบางอย่าง');
@@ -811,7 +827,7 @@
         }
 
         async function handleLogin() {
-            const userId = document.getElementById('userId').value.trim().toUpperCase();
+            const userId = document.getElementById('userId').value.trim();
             const password = document.getElementById('password').value;
 
             if(!userId || !password)  { 
