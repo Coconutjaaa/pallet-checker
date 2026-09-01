@@ -240,59 +240,6 @@
         </main>
     </div>
 
-    <!-- ==================== หน้า App พนักงานห้องชั่ง (Scale Operator) ==================== -->
-    <div id="scalePage" class="hidden min-h-screen bg-gray-100 pb-20">
-        <nav class="bg-teal-600 text-white p-4 shadow-md sticky top-0 z-10">
-            <div class="max-w-3xl mx-auto flex justify-between items-center">
-                <h1 class="text-xl font-bold truncate"><i class="fa-solid fa-scale-balanced mr-2"></i> ระบบห้องชั่ง</h1>
-                <div class="flex items-center gap-2 sm:gap-4">
-                    <span id="displayScaleUser" class="text-sm bg-teal-700 px-3 py-1 rounded-full hidden sm:inline-block"><i class="fa-solid fa-user mr-1"></i> User</span>
-                    <button onclick="handleLogout()" class="flex items-center text-teal-100 hover:text-white transition-colors bg-teal-700 hover:bg-red-500 px-3 py-1.5 rounded-lg" title="ออกจากระบบ">
-                        <i class="fa-solid fa-arrow-right-from-bracket mr-1 sm:mr-2"></i> <span class="font-bold text-sm hidden sm:inline-block">Log out</span>
-                    </button>
-                </div>
-            </div>
-        </nav>
-
-        <main class="max-w-3xl mx-auto p-4 mt-4 space-y-6">
-            <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
-                <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
-                    <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-truck-front mr-2 text-teal-600"></i> ถ่ายรูปและบันทึกข้อมูลรถบรรทุก</h2>
-                </div>
-                
-                <div class="mb-5 bg-teal-50 p-4 rounded-xl border border-teal-200">
-                    <label class="block text-teal-900 font-bold mb-1"><i class="fa-solid fa-id-card mr-1"></i> ทะเบียนรถบรรทุก (ระบุให้ตรงกับใบชั่ง)</label>
-                    <p class="text-xs text-teal-700 mb-2">กรอกเลขทะเบียน เช่น 70-1234 หรือ 82-5566 เพื่อจับคู่กับข้อมูลตาชั่งอัตโนมัติ</p>
-                    <input type="text" id="scaleLicensePlateInput" placeholder="กรอกทะเบียนรถ..." class="w-full p-3 border border-teal-300 rounded-lg text-lg font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white uppercase">
-                </div>
-
-                <div id="scaleBeforeScan" class="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 transition-colors hover:bg-gray-100">
-                    <i class="fa-solid fa-camera text-5xl text-gray-400 mb-4"></i>
-                    <p class="text-gray-600 mb-6 font-medium">กดปุ่มด้านล่างเพื่อถ่ายรูปรถ / ตาชั่ง</p>
-                    <input type="file" id="scaleCameraInput" accept="image/*" capture="environment" class="hidden" onchange="previewScaleImage(event)">
-                    <button onclick="document.getElementById('scaleCameraInput').click()" class="bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center mx-auto transition-all shadow-md active:scale-95">
-                        <i class="fa-solid fa-camera mr-2"></i> ถ่ายรูป
-                    </button>
-                </div>
-
-                <div id="scaleAfterScan" class="hidden text-center">
-                    <div class="relative inline-block border-2 border-teal-200 rounded-xl overflow-hidden shadow-sm bg-gray-50 p-2">
-                        <img id="scalePreviewImage" src="" alt="Scale Captured Image" class="max-h-80 md:max-h-96 object-contain mx-auto rounded cursor-pointer hover:opacity-90 transition-opacity" onclick="openImageModal(this.src)" title="คลิกเพื่อดูรูปขยายใหญ่">
-                    </div>
-                    
-                    <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
-                        <button onclick="resetScaleImage()" class="flex-1 sm:flex-none bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-3 rounded-lg font-bold transition-all active:scale-95">
-                            <i class="fa-solid fa-rotate-right mr-2"></i> ถ่ายใหม่
-                        </button>
-                        <button id="btnSaveScaleImage" onclick="saveScaleTruckImage()" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold transition-all active:scale-95 shadow">
-                            <i class="fa-solid fa-save mr-2"></i> บันทึกข้อมูลลงระบบ
-                        </button>
-                    </div>
-                </div>
-            </section>
-        </main>
-    </div>
-
     <!-- ==================== หน้าประวัติของฉัน ==================== -->
     <div id="checkerHistoryPage" class="hidden min-h-screen bg-gray-100 pb-20">
         <nav class="bg-blue-700 text-white p-4 shadow-md sticky top-0 z-10">
@@ -555,6 +502,257 @@
                             </thead>
                             <tbody id="pendingUsersTableBody" class="divide-y divide-gray-200 bg-white">
                                 <!-- Data will be populated here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- ==================== หน้า App พนักงานห้องชั่ง (Scale Operator) ==================== -->
+    <div id="scalePage" class="hidden min-h-screen bg-gray-100 pb-10">
+        <nav class="bg-teal-600 text-white p-4 shadow-md sticky top-0 z-10">
+            <div class="max-w-6xl mx-auto flex justify-between items-center">
+                <h1 class="text-xl font-bold truncate"><i class="fa-solid fa-scale-balanced mr-2"></i> ศูนย์ข้อมูลระบบ (Scale Operator)</h1>
+                <div class="flex items-center gap-4">
+                    <span id="displayScaleUser" class="text-sm bg-teal-700 px-3 py-1 rounded-full"><i class="fa-solid fa-user mr-1"></i> User</span>
+                    <button onclick="handleLogout()" class="flex items-center text-teal-100 hover:text-white transition-colors bg-teal-700 hover:bg-red-500 px-3 py-1.5 rounded-lg" title="ออกจากระบบ">
+                        <i class="fa-solid fa-arrow-right-from-bracket mr-2"></i> <span class="font-bold text-sm">Log out</span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+        <main class="max-w-6xl mx-auto p-4 mt-4">
+            <!-- TABS -->
+            <div class="flex gap-2 mb-6 border-b border-gray-300 overflow-x-auto whitespace-nowrap custom-scrollbar">
+                <button id="btnScaleTabDaily" onclick="switchScaleTab('daily')" class="px-6 py-3 font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-colors">
+                    <i class="fa-solid fa-calendar-day mr-2"></i> Monitor วันนี้
+                </button>
+                <button id="btnScaleTabMonthly" onclick="switchScaleTab('monthly')" class="px-6 py-3 font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-colors">
+                    <i class="fa-solid fa-calendar-days mr-2"></i> Report รายเดือน
+                </button>
+                <button id="btnScaleTabScale" onclick="switchScaleTab('scale')" class="px-6 py-3 font-bold text-teal-600 border-b-4 border-teal-600 transition-colors">
+                    <i class="fa-solid fa-truck-front mr-2"></i> ข้อมูลรถห้องชั่ง
+                </button>
+            </div>
+
+            <!-- VIEW: DAILY -->
+            <div id="divScaleDailyView" class="hidden">
+                <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">ภาพรวมประจำวัน</h2>
+                        <p class="text-gray-500 text-sm">อัปเดตแบบเรียลไทม์ (เลือกวันที่เพื่อดูข้อมูล)</p>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <div class="flex items-center gap-2">
+                            <label class="text-gray-600 font-medium text-sm">เลือกวันที่:</label>
+                            <input type="date" id="scaleDatePicker" class="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" onchange="clearScaleDiscrepancyFilter(); renderAdminDashboard();">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5 flex flex-col justify-center">
+                        <div class="flex items-center gap-3 mb-3">
+                            <div class="w-10 h-10 rounded-full bg-teal-100 text-teal-600 flex items-center justify-center text-lg">
+                                <i class="fa-solid fa-boxes-stacked"></i>
+                            </div>
+                            <h3 class="text-lg font-bold text-gray-800">สรุปยอดพาเลทเข้าวันนี้</h3>
+                        </div>
+                        <div class="grid grid-cols-3 gap-2 border-t border-gray-100 pt-3">
+                            <div>
+                                <p class="text-xs text-gray-500 font-medium mb-1">ลูกค้าเขียน</p>
+                                <p class="text-xl font-bold text-gray-700"><span id="scaleStatExpected">0</span></p>
+                            </div>
+                            <div class="border-l border-gray-100 pl-3">
+                                <p class="text-xs text-gray-500 font-medium mb-1">Checker นับ</p>
+                                <p class="text-xl font-bold text-teal-600"><span id="scaleStatActual">0</span></p>
+                            </div>
+                            <div class="border-l border-gray-100 pl-3">
+                                <p class="text-xs text-gray-500 font-medium mb-1">ส่วนต่าง (Diff)</p>
+                                <p class="text-xl font-bold" id="scaleStatDiff">0</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div onclick="toggleScaleDiscrepancyFilter()" class="bg-white rounded-xl shadow-sm border border-red-200 p-6 flex flex-col justify-center cursor-pointer hover:bg-red-50 hover:shadow-md transition-all group">
+                        <div class="flex items-center gap-4">
+                            <div class="w-14 h-14 rounded-full bg-red-100 text-red-600 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+                                <i class="fa-solid fa-triangle-exclamation"></i>
+                            </div>
+                            <div>
+                                <p class="text-red-500 text-sm font-medium">ใบนำส่งที่ "ยอดไม่ตรง" <span class="text-xs text-red-400 ml-1">(คลิกเพื่อกรอง)</span></p>
+                                <h3 class="text-3xl font-bold text-red-600"><span id="scaleStatDiscrepancy">0</span> <span class="text-sm font-normal text-red-400">ใบ</span></h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-8">
+                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center flex-wrap gap-3">
+                        <div class="flex items-center gap-3">
+                            <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-table mr-2"></i> ประวัติรับเข้าล่าสุด</h2>
+                            <button id="btnScaleClearDailyFilter" onclick="clearScaleDiscrepancyFilter()" class="hidden text-xs bg-red-100 hover:bg-red-200 text-red-700 px-3 py-1.5 rounded-full font-bold transition-colors">
+                                <i class="fa-solid fa-xmark mr-1"></i> เลิกกรองยอดไม่ตรง
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-600 whitespace-nowrap">
+                            <thead class="bg-gray-100 text-gray-700 uppercase border-b border-gray-200 text-xs">
+                                <tr>
+                                    <th class="px-4 py-3">document_no</th>
+                                    <th class="px-4 py-3">date</th>
+                                    <th class="px-4 py-3">customer_name</th>
+                                    <th class="px-4 py-3">plant_name</th>
+                                    <th class="px-4 py-3 text-center">checker_name</th>
+                                    <th class="px-4 py-3 text-right">expected (ลูกค้า)</th>
+                                    <th class="px-4 py-3 text-right">actual</th>
+                                    <th class="px-4 py-3 text-center">diff</th>
+                                    <th class="px-4 py-3 w-64">pallet_details</th>
+                                    <th class="px-4 py-3 text-center">Image</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scaleDailyRecordTableBody" class="divide-y divide-gray-200 bg-white">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: MONTHLY -->
+            <div id="divScaleMonthlyView" class="hidden">
+                <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">รายงานสรุปรายเดือน</h2>
+                        <p class="text-gray-500 text-sm">ข้อมูลสะสมเพื่อการวิเคราะห์แนวโน้ม</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <label class="text-gray-600 font-medium">เลือกเดือน (ค.ศ.):</label>
+                        <input type="month" id="scaleReportMonthPicker" class="p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:outline-none" onchange="generateMonthlyReport()">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2"><i class="fa-solid fa-box-open mr-2 text-teal-500"></i>ยอดรับเข้าสะสม</h3>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500">จำนวนบิลทั้งหมด:</span>
+                            <span id="scaleMonthlyTotalBills" class="font-bold text-xl">0</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-gray-500">รวมพาเลทรับเข้าจริง:</span>
+                            <span id="scaleMonthlyTotalPallets" class="font-bold text-2xl text-teal-700">0</span>
+                        </div>
+                    </div>
+                    
+                    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                        <h3 class="text-lg font-semibold text-gray-700 mb-4 border-b pb-2"><i class="fa-solid fa-chart-simple mr-2 text-red-500"></i>สรุปปัญหา</h3>
+                        <div class="flex justify-between items-center">
+                            <span class="text-gray-500">บิลที่ยอดไม่ตรง:</span>
+                            <span id="scaleMonthlyDiscrepancyBills" class="font-bold text-xl text-red-600">0</span>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <span class="text-gray-500">ส่วนต่างพาเลททั้งหมด:</span>
+                            <span id="scaleMonthlyPalletDiff" class="font-bold text-2xl text-red-700">0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-list mr-2"></i> ประวัติรายการในเดือนนี้</h2>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-600 whitespace-nowrap">
+                            <thead class="bg-gray-100 text-gray-700 uppercase border-b border-gray-200 text-xs">
+                                <tr>
+                                    <th class="px-4 py-3">document_no</th>
+                                    <th class="px-4 py-3">date</th>
+                                    <th class="px-4 py-3">customer_name</th>
+                                    <th class="px-4 py-3">plant_name</th>
+                                    <th class="px-4 py-3 text-center">checker_name</th>
+                                    <th class="px-4 py-3 text-right">expected (ลูกค้า)</th>
+                                    <th class="px-4 py-3 text-right">actual</th>
+                                    <th class="px-4 py-3 text-center">diff</th>
+                                    <th class="px-4 py-3 w-64">pallet_details</th>
+                                    <th class="px-4 py-3 text-center">Image</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scaleMonthlyRecordTableBody" class="divide-y divide-gray-200 bg-white">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- VIEW: SCALE (CAMERA + DATA) -->
+            <div id="divScaleScaleView" class="hidden">
+                <!-- ฟอร์มถ่ายรูปห้องชั่ง -->
+                <section class="bg-white p-5 rounded-xl shadow-sm border border-gray-200 mb-6">
+                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-3">
+                        <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-camera mr-2 text-teal-600"></i> ถ่ายรูปและบันทึกข้อมูลรถบรรทุก</h2>
+                    </div>
+                    
+                    <div class="mb-5 bg-teal-50 p-4 rounded-xl border border-teal-200">
+                        <label class="block text-teal-900 font-bold mb-1"><i class="fa-solid fa-id-card mr-1"></i> ทะเบียนรถบรรทุก (ระบุให้ตรงกับใบชั่ง)</label>
+                        <p class="text-xs text-teal-700 mb-2">กรอกเลขทะเบียน เช่น 70-1234 หรือ 82-5566 เพื่อจับคู่กับข้อมูลตาชั่งอัตโนมัติ</p>
+                        <input type="text" id="scaleLicensePlateInput" placeholder="กรอกทะเบียนรถ..." class="w-full p-3 border border-teal-300 rounded-lg text-lg font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white uppercase">
+                    </div>
+
+                    <div id="scaleBeforeScan" class="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 transition-colors hover:bg-gray-100">
+                        <i class="fa-solid fa-camera text-5xl text-gray-400 mb-4"></i>
+                        <p class="text-gray-600 mb-6 font-medium">กดปุ่มด้านล่างเพื่อถ่ายรูปรถ / ตาชั่ง</p>
+                        <input type="file" id="scaleCameraInput" accept="image/*" capture="environment" class="hidden" onchange="previewScaleImage(event)">
+                        <button onclick="document.getElementById('scaleCameraInput').click()" class="bg-teal-600 hover:bg-teal-700 text-white px-8 py-4 rounded-xl font-bold text-lg flex items-center justify-center mx-auto transition-all shadow-md active:scale-95">
+                            <i class="fa-solid fa-camera mr-2"></i> ถ่ายรูป
+                        </button>
+                    </div>
+
+                    <div id="scaleAfterScan" class="hidden text-center">
+                        <div class="relative inline-block border-2 border-teal-200 rounded-xl overflow-hidden shadow-sm bg-gray-50 p-2">
+                            <img id="scalePreviewImage" src="" alt="Scale Captured Image" class="max-h-80 md:max-h-96 object-contain mx-auto rounded cursor-pointer hover:opacity-90 transition-opacity" onclick="openImageModal(this.src)" title="คลิกเพื่อดูรูปขยายใหญ่">
+                        </div>
+                        
+                        <div class="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
+                            <button onclick="resetScaleImage()" class="flex-1 sm:flex-none bg-gray-200 hover:bg-gray-300 text-gray-800 px-6 py-3 rounded-lg font-bold transition-all active:scale-95">
+                                <i class="fa-solid fa-rotate-right mr-2"></i> ถ่ายใหม่
+                            </button>
+                            <button id="btnSaveScaleImage" onclick="saveScaleTruckImage()" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold transition-all active:scale-95 shadow">
+                                <i class="fa-solid fa-save mr-2"></i> บันทึกข้อมูลลงระบบ
+                            </button>
+                        </div>
+                    </div>
+                </section>
+                
+                <div class="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4 mt-8">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">ข้อมูลรถบรรทุก (Scale Data)</h2>
+                        <p class="text-gray-500 text-sm">แสดงข้อมูลการชั่งน้ำหนักและภาพถ่ายรถที่เชื่อมโยงกับทะเบียน</p>
+                    </div>
+                </div>
+
+                <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
+                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-truck-moving mr-2"></i> ประวัติรถเข้า-ออก</h2>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm text-gray-600 whitespace-nowrap">
+                            <thead class="bg-gray-100 text-gray-700 uppercase border-b border-gray-200 text-xs">
+                                <tr>
+                                    <th class="px-4 py-3">เลขที่เอกสารอ้างอิง</th>
+                                    <th class="px-4 py-3">ทะเบียนรถ</th>
+                                    <th class="px-4 py-3">เวลาเข้า</th>
+                                    <th class="px-4 py-3 text-right text-blue-600">น้ำหนักเข้า (กก.)</th>
+                                    <th class="px-4 py-3">เวลาออก</th>
+                                    <th class="px-4 py-3 text-right text-purple-600">น้ำหนักออก (กก.)</th>
+                                    <th class="px-4 py-3 text-center">รูปรถ (Scale)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scalePageScaleRecordTableBody" class="divide-y divide-gray-200 bg-white">
                             </tbody>
                         </table>
                     </div>
@@ -877,10 +1075,22 @@
                         if(document.getElementById('adminDatePicker')) {
                             document.getElementById('adminDatePicker').value = todayISO;
                         }
+                        switchAdminTab('daily');
                         initAdminDashboard();
                     } else if (userRole === 'SCALE') {
                         document.getElementById('displayScaleUser').innerHTML = `<i class="fa-solid fa-user mr-1"></i> ${currentUser}`;
                         document.getElementById('scalePage').classList.remove('hidden');
+                        
+                        const now = new Date();
+                        const currentMonthValue = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+                        if(document.getElementById('scaleReportMonthPicker')) document.getElementById('scaleReportMonthPicker').value = currentMonthValue;
+                        
+                        const todayISO = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                        if(document.getElementById('scaleDatePicker')) {
+                            document.getElementById('scaleDatePicker').value = todayISO;
+                        }
+                        switchScaleTab('scale');
+                        initAdminDashboard();
                     } else { 
                         document.getElementById('displayUser').innerHTML = `<i class="fa-solid fa-user mr-1"></i> ${currentUser}`;
                         document.getElementById('checkerPage').classList.remove('hidden');
@@ -1887,6 +2097,37 @@
             }
         }
 
+        function switchScaleTab(tabName) {
+            const btnDaily = document.getElementById('btnScaleTabDaily');
+            const btnMonthly = document.getElementById('btnScaleTabMonthly');
+            const btnScale = document.getElementById('btnScaleTabScale');
+
+            const viewDaily = document.getElementById('divScaleDailyView');
+            const viewMonthly = document.getElementById('divScaleMonthlyView');
+            const viewScale = document.getElementById('divScaleScaleView');
+
+            [btnDaily, btnMonthly, btnScale].forEach(btn => {
+                if(btn) btn.className = "px-6 py-3 font-bold text-gray-500 hover:text-gray-700 border-b-4 border-transparent transition-colors";
+            });
+            [viewDaily, viewMonthly, viewScale].forEach(view => {
+                if(view) view.classList.add('hidden');
+            });
+
+            if (tabName === 'daily') {
+                if(btnDaily) btnDaily.className = "px-6 py-3 font-bold text-teal-600 border-b-4 border-teal-600 transition-colors";
+                if(viewDaily) viewDaily.classList.remove('hidden');
+                renderAdminDashboard(); 
+            } else if (tabName === 'monthly') {
+                if(btnMonthly) btnMonthly.className = "px-6 py-3 font-bold text-teal-600 border-b-4 border-teal-600 transition-colors";
+                if(viewMonthly) viewMonthly.classList.remove('hidden');
+                generateMonthlyReport();
+            } else if (tabName === 'scale') {
+                if(btnScale) btnScale.className = "px-6 py-3 font-bold text-teal-600 border-b-4 border-teal-600 transition-colors";
+                if(viewScale) viewScale.classList.remove('hidden');
+                renderScaleDashboard();
+            }
+        }
+
         function switchAdminTab(tabName) {
             const btnDaily = document.getElementById('tabDaily');
             const btnMonthly = document.getElementById('tabMonthly');
@@ -2001,15 +2242,26 @@
             renderAdminDashboard(); 
         }
 
+        function toggleScaleDiscrepancyFilter() {
+            isDailyDiscrepancyFilterOn = true;
+            renderAdminDashboard(); 
+        }
+
+        function clearScaleDiscrepancyFilter() {
+            isDailyDiscrepancyFilterOn = false;
+            renderAdminDashboard(); 
+        }
+
         function renderAdminDashboard() {
             if (!globalAdminData) return;
             let db = globalAdminData; 
             
-            const datePicker = document.getElementById('adminDatePicker');
             let targetDateStr = "";
+            const isAdminVisible = !document.getElementById('adminPage').classList.contains('hidden');
+            const activeDatePicker = isAdminVisible ? document.getElementById('adminDatePicker') : document.getElementById('scaleDatePicker');
             
-            if (datePicker && datePicker.value) {
-                const [year, month, day] = datePicker.value.split('-');
+            if (activeDatePicker && activeDatePicker.value) {
+                const [year, month, day] = activeDatePicker.value.split('-');
                 targetDateStr = `${day}/${month}/${year}`;
             } else {
                 const now = new Date();
@@ -2024,30 +2276,47 @@
 
             const statExpected = document.getElementById('adminStatExpected');
             if (statExpected) statExpected.innerText = totalExpected;
+            const scaleStatExpected = document.getElementById('scaleStatExpected');
+            if (scaleStatExpected) scaleStatExpected.innerText = totalExpected;
 
             const statActual = document.getElementById('adminStatActual');
             if (statActual) statActual.innerText = totalActual;
+            const scaleStatActual = document.getElementById('scaleStatActual');
+            if (scaleStatActual) scaleStatActual.innerText = totalActual;
 
             const statDiff = document.getElementById('adminStatDiff');
             if (statDiff) {
                 statDiff.innerText = totalDiff > 0 ? `+${totalDiff}` : totalDiff;
                 statDiff.className = totalDiff !== 0 ? "text-xl font-bold text-red-600" : "text-xl font-bold text-gray-500";
             }
+            const scaleStatDiff = document.getElementById('scaleStatDiff');
+            if (scaleStatDiff) {
+                scaleStatDiff.innerText = totalDiff > 0 ? `+${totalDiff}` : totalDiff;
+                scaleStatDiff.className = totalDiff !== 0 ? "text-xl font-bold text-red-600" : "text-xl font-bold text-gray-500";
+            }
 
             const statDiscrepancy = document.getElementById('adminStatDiscrepancy');
             if (statDiscrepancy) statDiscrepancy.innerText = todayRecords.filter(r => r.expectedQty !== r.actualQty).length;
+            const scaleStatDiscrepancy = document.getElementById('scaleStatDiscrepancy');
+            if (scaleStatDiscrepancy) scaleStatDiscrepancy.innerText = todayRecords.filter(r => r.expectedQty !== r.actualQty).length;
 
             const btnClearFilter = document.getElementById('btnClearDailyFilter');
+            const scaleBtnClearFilter = document.getElementById('btnScaleClearDailyFilter');
             if (isDailyDiscrepancyFilterOn) {
                 todayRecords = todayRecords.filter(r => r.expectedQty !== r.actualQty);
                 if (btnClearFilter) btnClearFilter.classList.remove('hidden');
+                if (scaleBtnClearFilter) scaleBtnClearFilter.classList.remove('hidden');
             } else {
                 if (btnClearFilter) btnClearFilter.classList.add('hidden');
+                if (scaleBtnClearFilter) scaleBtnClearFilter.classList.add('hidden');
             }
 
             const tableBody = document.getElementById('adminRecordTableBody');
+            const scaleTableBody = document.getElementById('scaleDailyRecordTableBody');
             if(todayRecords.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="10" class="text-center text-gray-500 py-10 text-lg">${isDailyDiscrepancyFilterOn ? 'ไม่พบบิลที่ยอดไม่ตรง' : `ไม่พบข้อมูลของวันที่ ${targetDateStr}`}</td></tr>`;
+                const emptyMsg = `<tr><td colspan="10" class="text-center text-gray-500 py-10 text-lg">${isDailyDiscrepancyFilterOn ? 'ไม่พบบิลที่ยอดไม่ตรง' : `ไม่พบข้อมูลของวันที่ ${targetDateStr}`}</td></tr>`;
+                if(tableBody) tableBody.innerHTML = emptyMsg;
+                if(scaleTableBody) scaleTableBody.innerHTML = emptyMsg;
                 return;
             }
 
@@ -2093,7 +2362,8 @@
                         </td>
                     </tr>`;
             });
-            tableBody.innerHTML = html;
+            if(tableBody) tableBody.innerHTML = html;
+            if(scaleTableBody) scaleTableBody.innerHTML = html;
         }
         
         async function generateMonthlyReport() {
@@ -2104,7 +2374,9 @@
                 if (!result.success) return;
                 
                 const db = result.data;
-                const selectedMonthStr = document.getElementById('reportMonthPicker').value; 
+                const isAdminVisible = !document.getElementById('adminPage').classList.contains('hidden');
+                const activeMonthPicker = isAdminVisible ? document.getElementById('reportMonthPicker') : document.getElementById('scaleReportMonthPicker');
+                const selectedMonthStr = activeMonthPicker ? activeMonthPicker.value : "";
                 
                 const monthlyRecords = db.filter(r => {
                     if (r.date) {
@@ -2127,14 +2399,27 @@
                     }
                 });
 
-                document.getElementById('monthlyTotalBills').innerText = totalBills;
-                document.getElementById('monthlyTotalPallets').innerText = totalPallets;
-                document.getElementById('monthlyDiscrepancyBills').innerText = discrepancyBills;
-                document.getElementById('monthlyPalletDiff').innerText = palletDiff > 0 ? `+${palletDiff}` : palletDiff;
+                if(document.getElementById('monthlyTotalBills')) document.getElementById('monthlyTotalBills').innerText = totalBills;
+                if(document.getElementById('scaleMonthlyTotalBills')) document.getElementById('scaleMonthlyTotalBills').innerText = totalBills;
+                
+                if(document.getElementById('monthlyTotalPallets')) document.getElementById('monthlyTotalPallets').innerText = totalPallets;
+                if(document.getElementById('scaleMonthlyTotalPallets')) document.getElementById('scaleMonthlyTotalPallets').innerText = totalPallets;
+
+                if(document.getElementById('monthlyDiscrepancyBills')) document.getElementById('monthlyDiscrepancyBills').innerText = discrepancyBills;
+                if(document.getElementById('scaleMonthlyDiscrepancyBills')) document.getElementById('scaleMonthlyDiscrepancyBills').innerText = discrepancyBills;
+
+                const diffTxt = palletDiff > 0 ? `+${palletDiff}` : palletDiff;
+                if(document.getElementById('monthlyPalletDiff')) document.getElementById('monthlyPalletDiff').innerText = diffTxt;
+                if(document.getElementById('scaleMonthlyPalletDiff')) document.getElementById('scaleMonthlyPalletDiff').innerText = diffTxt;
+
 
                 const tableBody = document.getElementById('monthlyRecordTableBody');
+                const scaleTableBody = document.getElementById('scaleMonthlyRecordTableBody');
+
                 if(monthlyRecords.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="10" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลในเดือนที่เลือก</td></tr>';
+                    const emptyMsg = '<tr><td colspan="10" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลในเดือนที่เลือก</td></tr>';
+                    if(tableBody) tableBody.innerHTML = emptyMsg;
+                    if(scaleTableBody) scaleTableBody.innerHTML = emptyMsg;
                     return;
                 }
 
@@ -2180,7 +2465,8 @@
                             </td>
                         </tr>`;
                 });
-                tableBody.innerHTML = html;
+                if(tableBody) tableBody.innerHTML = html;
+                if(scaleTableBody) scaleTableBody.innerHTML = html;
 
             } catch (error) {
                 if (error.message === "Unauthorized") return;
@@ -2193,9 +2479,12 @@
             const db = globalAdminData; 
             
             const tableBody = document.getElementById('scaleRecordTableBody');
+            const scalePageTableBody = document.getElementById('scalePageScaleRecordTableBody');
             
             if(db.length === 0) {
-                tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลรถบรรทุก</td></tr>`;
+                const emptyMsg = `<tr><td colspan="7" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลรถบรรทุก</td></tr>`;
+                if(tableBody) tableBody.innerHTML = emptyMsg;
+                if(scalePageTableBody) scalePageTableBody.innerHTML = emptyMsg;
                 return;
             }
 
@@ -2226,7 +2515,8 @@
                         <td class="px-4 py-3 text-center">${scaleImgBtn}</td>
                     </tr>`;
             });
-            tableBody.innerHTML = html;
+            if(tableBody) tableBody.innerHTML = html;
+            if(scalePageTableBody) scalePageTableBody.innerHTML = html;
         }
 
         function openImageModal(imgSrc) {
