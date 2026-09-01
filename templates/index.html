@@ -84,6 +84,7 @@
                         <option value="SCALE">พนักงานห้องชั่ง (Scale)</option>
                     </select>
                 </div>
+                <!-- รหัสผ่าน (ตั้งรหัส + ยืนยันรหัสผ่านใหม่) -->
                 <div>
                     <label class="block text-gray-700 font-medium mb-1">ตั้งรหัสผ่าน</label>
                     <div class="relative">
@@ -93,6 +94,17 @@
                         </button>
                     </div>
                 </div>
+                <div>
+                    <label class="block text-gray-700 font-medium mb-1">ยืนยันรหัสผ่าน</label>
+                    <div class="relative">
+                        <input type="password" id="regConfirmPassword" placeholder="ยืนยันรหัสผ่านอีกครั้ง" class="w-full pr-12 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                        <button type="button" onclick="togglePassword('regConfirmPassword', 'toggleRegConfirmPasswordIcon')" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-blue-600 focus:outline-none">
+                            <i id="toggleRegConfirmPasswordIcon" class="fa-solid fa-eye text-lg"></i>
+                        </button>
+                    </div>
+                    <p class="text-xs text-gray-500 mt-2">* รหัสผ่านต้องยาว 8 ตัวอักษรขึ้นไป มีภาษาอังกฤษ ตัวเลข และอักขระพิเศษ</p>
+                </div>
+
                 <button onclick="handleRegister()" class="w-full bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-bold text-lg transition-colors mt-4 shadow-md flex justify-center items-center">
                     ลงทะเบียน <i class="fa-solid fa-user-plus ml-2"></i>
                 </button>
@@ -742,11 +754,25 @@
         async function handleRegister() {
             const userId = document.getElementById('regUserId').value.trim().toUpperCase();
             const password = document.getElementById('regPassword').value;
+            const confirmPassword = document.getElementById('regConfirmPassword').value;
             const role = document.getElementById('regRole').value;
 
-            if(!userId || !password)  { 
-                showCustomAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณากรอกรหัสพนักงานและรหัสผ่านครับ'); 
+            if(!userId || !password || !confirmPassword)  { 
+                showCustomAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณากรอกรหัสพนักงานและรหัสผ่าน'); 
                 return; 
+            }
+
+            if(password !== confirmPassword){
+                showCustomAlert('warning', 'รหัสผ่านไม่ตรงกัน', 'กรุณายืนยันรหัสผ่านให้ตรงกับรหัสผ่านที่ตั้งไว้');
+                return;
+            }
+
+            // 2. ตรวจสอบความซับซ้อนของรหัสผ่าน (Regex)
+            // เงื่อนไข: ยาว 8 ตัวขึ้นไป, มีภาษาอังกฤษ, มีตัวเลข, มีอักขระพิเศษ
+            const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,}$/;
+            if (!passwordRegex.test(password)) {
+                showCustomAlert('warning', 'รหัสผ่านไม่ปลอดภัย', 'รหัสผ่านต้องยาว 8 ตัวอักษรขึ้นไป และต้องประกอบด้วยภาษาอังกฤษ ตัวเลข และอักขระพิเศษรวมอยู่ด้วยครับ');
+                return;
             }
 
             try {
@@ -766,6 +792,7 @@
                     showCustomAlert('success', 'สมัครสำเร็จ!', 'ระบบได้รับข้อมูลของคุณแล้ว กรุณารอ Admin อนุมัติก่อนจึงจะเข้าสู่ระบบได้');
                     document.getElementById('regUserId').value = '';
                     document.getElementById('regPassword').value = '';
+                    document.getElementById('regConfirmPassword').value = '';
                     toggleAuthMode();
                 } else {
                     showCustomAlert('warning', 'ไม่สามารถสมัครได้', data.detail || 'เกิดข้อผิดพลาดบางอย่าง');
