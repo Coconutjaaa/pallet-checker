@@ -1,4 +1,4 @@
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, Form, Depends
+from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect, Form, Depends, Query
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -155,6 +155,10 @@ def init_db():
     except Exception:
         conn.rollback()
         pass 
+
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipt_doc ON receipt_data(document_no);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_receipt_date ON receipt_data(date);')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);')
     
     conn.commit()
     conn.close()
@@ -531,7 +535,11 @@ async def save_truck_image(
 
 # [🔒 PROTECTED] ดึงประวัติข้อมูลทั้งหมด
 @app.get("/api/records")
-async def get_records(current_user: dict = Depends(get_current_user)):
+async def get_records(
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    current_user: dict = Depends(get_current_user)
+):
     try:
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -579,8 +587,11 @@ async def get_records(current_user: dict = Depends(get_current_user)):
                 ORDER BY r.document_no, r.id DESC
             ) AS unique_records
             ORDER BY id DESC
-        """)
+            LIMIT %s OFFSET %s
+        """, (limit, offset))
         rows = cursor.fetchall()
+        cursor.execute("SELECT COUNT(DISTINCT document_no) FROM receipt_data")
+        total_count = cursor.fetchone()[0]
         conn.close()
 
         records = []
@@ -607,7 +618,7 @@ async def get_records(current_user: dict = Depends(get_current_user)):
                     "truck_image_base64": row["truck_image_base64"] or None
                 }
             })
-        return {"success": True, "data": records}
+        return {"success": True, "data": records, "total": total_count}
     except Exception as e:
         print(f"❌ API Records Error: {e}")
         return {"success": False, "message": str(e)}

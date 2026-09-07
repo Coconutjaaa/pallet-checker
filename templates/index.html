@@ -484,12 +484,22 @@
                         <h2 class="text-2xl font-bold text-gray-800">จัดการผู้ใช้งาน</h2>
                         <p class="text-gray-500 text-sm">อนุมัติหรือตรวจสอบสถานะของพนักงานในระบบ</p>
                     </div>
+                    
+                    <!-- เพิ่ม Segmented Control (Sub-tabs) สำหรับสลับมุมมอง -->
+                    <div class="bg-gray-200 p-1 rounded-lg flex gap-1 self-start sm:self-auto">
+                        <button id="subTabPending" onclick="switchUserTab('pending')" class="bg-white text-gray-800 shadow-sm px-5 py-2 rounded-md font-bold text-sm transition-all flex items-center">
+                            รออนุมัติ
+                        </button>
+                        <button id="subTabApproved" onclick="switchUserTab('approved')" class="text-gray-500 hover:text-gray-700 px-5 py-2 rounded-md font-bold text-sm transition-all flex items-center">
+                            ใช้งานอยู่
+                        </button>
+                    </div>
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
                     <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
-                        <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-user-clock mr-2"></i> รายชื่อพนักงานรออนุมัติ</h2>
-                        <button onclick="loadPendingUsers()" class="text-sm text-blue-600 hover:text-blue-800"><i class="fa-solid fa-rotate-right mr-1"></i> รีเฟรช</button>
+                        <h2 id="userTableTitle" class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-user-clock mr-2"></i> รายชื่อพนักงานรออนุมัติ</h2>
+                        <button onclick="refreshUserTable()" class="text-sm text-blue-600 hover:text-blue-800"><i class="fa-solid fa-rotate-right mr-1"></i> รีเฟรช</button>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm text-gray-600 whitespace-nowrap">
@@ -497,12 +507,13 @@
                                 <tr>
                                     <th class="px-4 py-3">ID</th>
                                     <th class="px-4 py-3">รหัสพนักงาน (Username)</th>
+                                    <th class="px-4 py-3">ชื่อ-นามสกุล</th>
                                     <th class="px-4 py-3 text-center">ตำแหน่ง (Role)</th>
                                     <th class="px-4 py-3 text-center">จัดการ</th>
                                 </tr>
                             </thead>
-                            <tbody id="pendingUsersTableBody" class="divide-y divide-gray-200 bg-white">
-                                <!-- Data will be populated here -->
+                            <!-- รวบใช้ ID เดียวในการแสดงข้อมูล -->
+                            <tbody id="usersTableBody" class="divide-y divide-gray-200 bg-white">
                             </tbody>
                         </table>
                     </div>
@@ -957,6 +968,139 @@
                 regSec.classList.remove('hidden');
                 mainTitle.innerText = "ลงทะเบียนพนักงานใหม่";
                 subTitle.innerText = "สมัครใช้งานระบบ (ต้องรอ Admin อนุมัติ)";
+            }
+        }
+
+        let currentUserView = 'pending'; // เก็บสถานะว่ากำลังดูแท็บไหนอยู่
+
+        function switchUserTab(tab) {
+            currentUserView = tab;
+            const btnPending = document.getElementById('subTabPending');
+            const btnApproved = document.getElementById('subTabApproved');
+            const title = document.getElementById('userTableTitle');
+
+            if (tab === 'pending') {
+                btnPending.className = "bg-white text-gray-800 shadow-sm px-5 py-2 rounded-md font-bold text-sm transition-all flex items-center";
+                btnApproved.className = "text-gray-500 hover:text-gray-700 px-5 py-2 rounded-md font-bold text-sm transition-all flex items-center";
+                title.innerHTML = '<i class="fa-solid fa-user-clock mr-2"></i> รายชื่อพนักงานรออนุมัติ';
+            } else {
+                btnApproved.className = "bg-white text-gray-800 shadow-sm px-5 py-2 rounded-md font-bold text-sm transition-all flex items-center";
+                btnPending.className = "text-gray-500 hover:text-gray-700 px-5 py-2 rounded-md font-bold text-sm transition-all flex items-center";
+                title.innerHTML = '<i class="fa-solid fa-users mr-2"></i> รายชื่อพนักงานที่ใช้งานอยู่';
+            }
+            refreshUserTable();
+        }
+
+        function refreshUserTable() {
+            if (currentUserView === 'pending') {
+                loadUsersData('/auth/users/pending', 'pending');
+            } else {
+                // คุณต้องสร้าง API ยิงไปที่ /auth/users/approved (หรือ /auth/users แล้วกรอง) ในฝั่ง FastAPI เพิ่มเติมนะครับ
+                loadUsersData('/auth/users/approved', 'approved'); 
+            }
+        }
+
+        // ฟังก์ชันโหลดข้อมูลอเนกประสงค์ (ใช้ร่วมกันทั้ง 2 แท็บ)
+        async function loadUsersData(apiUrl, viewType) {
+            const tbody = document.getElementById('usersTableBody');
+            tbody.innerHTML = Array(4).fill().map(() => `
+                <tr class="animate-pulse bg-white border-b border-gray-100">
+                    <td class="px-4 py-4"><div class="h-4 bg-gray-200 rounded w-8"></div></td>
+                    <td class="px-4 py-4"><div class="h-4 bg-gray-200 rounded w-24"></div></td>
+                    <td class="px-4 py-4"><div class="h-4 bg-gray-200 rounded w-32"></div></td>
+                    <td class="px-4 py-4 flex justify-center"><div class="h-6 bg-gray-200 rounded w-16"></div></td>
+                    <td class="px-4 py-4"><div class="h-8 bg-gray-200 rounded w-full max-w-[120px] mx-auto"></div></td>
+                </tr>
+            `).join('');
+
+            try {
+                const response = await fetchWithAuth(apiUrl);
+                const result = await response.json();
+                
+                if(!result.success || result.data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-gray-500 py-10">${viewType === 'pending' ? 'ไม่มีพนักงานรอการอนุมัติ' : 'ไม่พบข้อมูลผู้ใช้งาน'}</td></tr>`;
+                    return;
+                }
+
+                let html = '';
+                result.data.forEach(u => {
+                    const roleBadge = u.role === 'SCALE' ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800';
+                    
+                    // UI ปุ่มจัดการจะต่างกันตาม View
+                    let actionButtons = '';
+                    if (viewType === 'pending') {
+                        actionButtons = `
+                            <div class="flex items-center justify-center gap-2" id="action-container-${u.id}">
+                                <button onclick="approveUser(${u.id})" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm transition-all active:scale-95">
+                                    <i class="fa-solid fa-check mr-1"></i> อนุมัติ
+                                </button>
+                                <button onclick="rejectUser(${u.id})" class="bg-white border border-red-300 text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm transition-all active:scale-95">
+                                    <i class="fa-solid fa-xmark mr-1"></i> ปฏิเสธ
+                                </button>
+                            </div>`;
+                    } else {
+                        // UI สำหรับคนที่อนุมัติแล้ว (เช่น ระงับสิทธิ์ชั่วคราว หรือรีเซ็ตรหัสผ่าน)
+                        actionButtons = `
+                            <div class="flex items-center justify-center gap-2">
+                                <button onclick="suspendUser(${u.id})" class="bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5 rounded-lg font-bold text-sm shadow-sm transition-all active:scale-95" title="ระงับสิทธิ์การใช้งาน">
+                                    <i class="fa-solid fa-ban mr-1"></i> ระงับสิทธิ์
+                                </button>
+                            </div>`;
+                    }
+
+                    html += `
+                        <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100">
+                            <td class="px-4 py-3 font-medium text-gray-500">${u.id}</td>
+                            <td class="px-4 py-3 font-bold text-gray-800">${u.username}</td>
+                            <td class="px-4 py-3 text-gray-700 font-medium">${u.first_name || '-'} ${u.last_name || '-'}</td>
+                            <td class="px-4 py-3 text-center"><span class="${roleBadge} px-2 py-1 rounded font-bold text-xs">${u.role}</span></td>
+                            <td class="px-4 py-3 text-center">${actionButtons}</td>
+                        </tr>
+                    `;
+                });
+                tbody.innerHTML = html;
+            } catch(e) {
+                if(e.message !== "Unauthorized") {
+                    console.error("โหลดรายการพนักงานไม่สำเร็จ", e);
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center text-red-500 py-10">เกิดข้อผิดพลาดในการโหลดข้อมูล</td></tr>`;
+                }
+            }
+        }
+
+        // อัปเดตตอนกด Tab จัดการผู้ใช้งานใน Navigation หลัก ให้แสดงสถานะเดิมหรือสถานะ Pending
+        // ไปแก้ไขในฟังก์ชัน switchAdminTab(tabName) ตรงบรรทัดที่เกี่ยวกับ 'users' ให้เรียก refreshUserTable()
+
+        async function suspendUser(userId) {
+            if(!confirm("ยืนยันการระงับสิทธิ์ผู้ใช้งานนี้ใช่หรือไม่?")) return;
+            
+            try {
+                const response = await fetchWithAuth(`/auth/users/suspend/${userId}`, { method: 'PUT' });
+                const result = await response.json();
+                if(result.success) {
+                    showCustomAlert('success', 'สำเร็จ', result.message);
+                    refreshUserTable(); // โหลดตารางใหม่
+                } else {
+                    showCustomAlert('warning', 'ผิดพลาด', result.detail);
+                }
+            } catch(e) {
+                if(e.message !== "Unauthorized") console.error(e);
+            }
+        }
+
+        async function rejectUser(userId) {
+            if(!confirm("คุณต้องการปฏิเสธคำขอและลบผู้ใช้นี้ออกจากระบบใช่หรือไม่?")) return;
+            
+            try {
+                const response = await fetchWithAuth(`/auth/users/${userId}`, { method: 'DELETE' });
+                const result = await response.json();
+                if(result.success) {
+                    showCustomAlert('success', 'ลบผู้ใช้สำเร็จ', result.message);
+                    refreshUserTable(); // โหลดตารางใหม่
+                } else {
+                    showCustomAlert('warning', 'ผิดพลาด', result.detail);
+                }
+            } catch(e) {
+                if(e.message !== "Unauthorized") console.error(e);
             }
         }
 
@@ -2163,64 +2307,59 @@
             } else if (tabName === 'users') {
                 btnUsers.className = "px-6 py-3 font-bold text-purple-600 border-b-4 border-purple-600 transition-colors";
                 viewUsers.classList.remove('hidden');
-                loadPendingUsers();
+                switchUserTab('pending');
             }
         }
 
-        async function loadPendingUsers() {
-            try {
-                const response = await fetchWithAuth('/auth/users/pending');
-                const result = await response.json();
-                
-                if(!result.success) return;
-
-                const tbody = document.getElementById('pendingUsersTableBody');
-                if (result.data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-gray-500 py-10">ไม่มีพนักงานรอการอนุมัติ</td></tr>`;
-                    return;
-                }
-
-                let html = '';
-                result.data.forEach(u => {
-                    const roleBadge = u.role === 'SCALE' ? 'bg-teal-100 text-teal-800' : 'bg-blue-100 text-blue-800';
-                    html += `
-                        <tr class="hover:bg-gray-50 transition-colors border-b border-gray-100">
-                            <td class="px-4 py-3 font-medium text-gray-500">${u.id}</td>
-                            <td class="px-4 py-3 font-bold text-gray-800">${u.username}</td>
-                            <td class="px-4 py-3 text-center"><span class="${roleBadge} px-2 py-1 rounded font-bold text-xs">${u.role}</span></td>
-                            <td class="px-4 py-3 text-center">
-                                <button onclick="approveUser(${u.id})" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-bold text-sm shadow-sm transition-all active:scale-95">
-                                    อนุมัติ <i class="fa-solid fa-check ml-1"></i>
-                                </button>
-                            </td>
-                        </tr>
-                    `;
-                });
-                tbody.innerHTML = html;
-            } catch(e) {
-                if(e.message !== "Unauthorized") console.error("โหลดรายการพนักงานไม่สำเร็จ", e);
-            }
-        }
-
+        
         async function approveUser(userId) {
+            // 1. เปลี่ยน UI ทันทีเพื่อให้ Feedback กับแอดมิน
+            const actionContainer = document.getElementById(`action-container-${userId}`);
+            const originalHtml = actionContainer.innerHTML;
+            actionContainer.innerHTML = `<span class="bg-green-100 text-green-700 px-3 py-1.5 rounded-lg font-bold text-sm inline-flex items-center"><i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังประมวลผล...</span>`;
+
             try {
                 const response = await fetchWithAuth(`/auth/users/approve/${userId}`, { method: 'PUT' });
                 const result = await response.json();
 
                 if(result.success) {
+                    // 2. แสดงสถานะว่า "อนุมัติแล้ว" ชัดเจน
+                    actionContainer.innerHTML = `<span class="bg-green-500 text-white px-3 py-1.5 rounded-lg font-bold text-sm inline-flex items-center"><i class="fa-solid fa-check-circle mr-2"></i> อนุมัติแล้ว</span>`;
+                    
                     showCustomAlert('success', 'อนุมัติสำเร็จ', 'ผู้ใช้งานสามารถเข้าสู่ระบบได้แล้ว');
-                    loadPendingUsers(); 
+                    
+                    // 3. หน่วงเวลา 1.5 วินาทีให้แอดมินเห็นสถานะ ก่อนรีเฟรชตาราง
+                    setTimeout(() => {
+                        loadPendingUsers(); 
+                    }, 1500);
                 } else {
+                    actionContainer.innerHTML = originalHtml;
                     showCustomAlert('warning', 'เกิดข้อผิดพลาด', result.detail || 'ไม่สามารถอนุมัติได้');
                 }
             } catch(e) {
+                actionContainer.innerHTML = originalHtml;
                 if(e.message !== "Unauthorized") console.error("อนุมัติไม่สำเร็จ", e);
             }
         }
 
-        async function updateAdminDashboard() {
+        async function updateAdminDashboard(page=1) {
+            const limit = 50;
+            const offset = (page-1)*limit;
+            const tbody = document.getElementById('adminRecordTableBody');
+
+            // skeleton loader
+            tbody.innerHTML = Array(5).fill().map(() => `
+                <tr class="animate-pulse bg-white border-b border-gray-100">
+                    <td class="px-4 py-4"><div class="h-4 bg-gray-200 rounded w-24"></div></td>
+                    <td class="px-4 py-4"><div class="h-4 bg-gray-200 rounded w-20"></div></td>
+                    <td class="px-4 py-4"><div class="h-4 bg-gray-200 rounded w-32"></div></td>
+                    <td class="px-4 py-4"><div class="h-4 bg-gray-200 rounded w-16"></div></td>
+                    <td colspan="6"></td>
+                </tr>
+            `).join('');
+
             try {
-                const response = await fetchWithAuth('/api/records');
+                const response = await fetchWithAuth(`/api/records?limit=${limit}&offset=${offset}`);
                 const result = await response.json();
                 
                 if (!result.success) return;

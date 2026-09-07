@@ -113,9 +113,27 @@ async def get_pending_users(current_user: dict = Depends(get_current_user)):
     
     conn = get_db_connection()
     cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cursor.execute("SELECT id, username, role FROM users WHERE is_approved = FALSE")
+    cursor.execute("SELECT id, username, first_name, last_name, role FROM users WHERE is_approved = FALSE")
     users = cursor.fetchall()
     conn.close()
+    return {"success": True, "data": [dict(u) for u in users]}
+
+@router.get("/users/approved")
+async def get_approved_users(current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "ADMIN":
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เข้าถึง")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    # ดึงเฉพาะคนที่ถูกอนุมัติแล้ว และไม่ดึง Admin คนที่กำลัง Login อยู่ (ป้องกันการเผลอระงับสิทธิ์ตัวเอง)
+    cursor.execute("""
+        SELECT id, username, first_name, last_name, role 
+        FROM users 
+        WHERE is_approved = true AND username != %s
+    """, (current_user["username"],))
+    users = cursor.fetchall()
+    conn.close()
+    
     return {"success": True, "data": [dict(u) for u in users]}
 
 @router.put("/users/approve/{user_id}")
@@ -129,3 +147,46 @@ async def approve_user(user_id: int, current_user: dict = Depends(get_current_us
     conn.commit()
     conn.close()
     return {"success": True, "message": "อนุมัติผู้ใช้งานเรียบร้อยแล้ว"}
+
+
+# ==========================================
+# 2. API ระงับสิทธิ์การใช้งาน (เปลี่ยนเป็นรออนุมัติใหม่)
+# ==========================================
+@router.put("/users/suspend/{user_id}")
+async def suspend_user(user_id: int, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "ADMIN":
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เข้าถึง")
+    
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    # อัปเดตสถานะกลับเป็น FALSE 
+    cursor.execute("UPDATE users SET is_approved = FALSE WHERE id = %s", (user_id,))
+    row_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    
+    if row_count == 0:
+        return {"success": False, "detail": "ไม่พบผู้ใช้งานนี้ในระบบ"}
+        
+    return {"success": True, "message": "ระงับสิทธิ์ผู้ใช้งานเรียบร้อยแล้ว"}
+
+
+# ==========================================
+# 3. API ปฏิเสธคำขอ / ลบผู้ใช้งานทิ้ง (สำหรับปุ่ม "ปฏิเสธ" ในแท็บรออนุมัติ)
+# ==========================================
+@router.delete("/users/{user_id}")
+async def delete_user(user_id: int, current_user: dict = Depends(get_current_user)):
+    if current_user["role"] != "ADMIN":
+        raise HTTPException(status_code=403, detail="ไม่มีสิทธิ์เข้าถึง")
+        
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+    row_count = cursor.rowcount
+    conn.commit()
+    conn.close()
+    
+    if row_count == 0:
+        return {"success": False, "detail": "ไม่พบข้อมูลผู้ใช้งานนี้"}
+        
+    return {"success": True, "message": "ลบข้อมูลผู้ใช้งานออกจากระบบเรียบร้อยแล้ว"}
