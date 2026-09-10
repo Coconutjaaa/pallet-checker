@@ -1,0 +1,16 @@
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+    -webkit-appearance: none; 
+    margin: 0; 
+}
+.flash-green { animation: flashGreen 0.4s ease-out; }
+@keyframes flashGreen {
+    0% { background-color: #ffffff; }
+    50% { background-color: #bbf7d0; } 
+    100% { background-color: #ffffff; }
+}
+.card-bg-light { background-color: #fdf5f5; }
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+.custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
