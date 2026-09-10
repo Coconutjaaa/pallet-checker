@@ -14,3 +14,18 @@ input[type=number]::-webkit-outer-spin-button {
 .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 4px; }
 .custom-scrollbar::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+
+@media print {
+    body * {
+        visibility: hidden; /* ซ่อนทุกอย่างบนหน้าจอ */
+    }
+    #printTicketContainer, #printTicketContainer * {
+        visibility: visible; /* แสดงเฉพาะตั๋ว */
+    }
+    #printTicketContainer {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 80mm; /* ขนาดกระดาษสลิปมาตรฐาน */
+    }
+}

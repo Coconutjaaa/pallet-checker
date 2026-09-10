@@ -700,7 +700,17 @@
                     <div class="mb-5 bg-teal-50 p-4 rounded-xl border border-teal-200">
                         <label class="block text-teal-900 font-bold mb-1"><i class="fa-solid fa-id-card mr-1"></i> ทะเบียนรถบรรทุก (ระบุให้ตรงกับใบชั่ง)</label>
                         <p class="text-xs text-teal-700 mb-2">กรอกเลขทะเบียน เช่น 70-1234 หรือ 82-5566 เพื่อจับคู่กับข้อมูลตาชั่งอัตโนมัติ</p>
-                        <input type="text" id="scaleLicensePlateInput" placeholder="กรอกทะเบียนรถ..." class="w-full p-3 border border-teal-300 rounded-lg text-lg font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white uppercase">
+                        <input type="text" id="scaleLicensePlateInput" placeholder="กรอกทะเบียนรถ..." oninput="handleScaleLicensePlateChange()" class="w-full p-3 border border-teal-300 rounded-lg text-lg font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white uppercase">
+
+                        <label class="block text-teal-900 font-bold mb-1 mt-4"><i class="fa-solid fa-id-badge mr-1"></i> ชื่อคนขับ (เลือกจากรายการ)</label>
+                        <p class="text-xs text-teal-700 mb-2">กรอกทะเบียนรถก่อน ระบบจะกรองรายชื่อคนขับที่เคยขับรถคันนี้มาให้เลือก</p>
+                        <select id="scaleDriverNameSelect" class="w-full p-3 border border-teal-300 rounded-lg text-lg font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+                            <option value="">-- เลือกชื่อคนขับ --</option>
+                        </select>
+
+                        <label class="block text-teal-900 font-bold mb-1 mt-4"><i class="fa-solid fa-pallet mr-1"></i> จำนวนพาเลทที่บรรทุกมา</label>
+                        <p class="text-xs text-teal-700 mb-2">กรอกจำนวนพาเลทที่บรรทุกมากับรถคันนี้</p>
+                        <input type="number" id="scalePalletQuantityInput" min="0" step="1" placeholder="กรอกจำนวนพาเลท..." class="w-full p-3 border border-teal-300 rounded-lg text-lg font-bold text-teal-900 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
                     </div>
 
                     <div id="scaleBeforeScan" class="text-center p-8 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 transition-colors hover:bg-gray-100">
@@ -722,7 +732,7 @@
                                 <i class="fa-solid fa-rotate-right mr-2"></i> ถ่ายใหม่
                             </button>
                             <button id="btnSaveScaleImage" onclick="saveScaleTruckImage()" class="flex-1 sm:flex-none bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-bold transition-all active:scale-95 shadow">
-                                <i class="fa-solid fa-save mr-2"></i> บันทึกข้อมูลลงระบบ
+                                <i class="fa-solid fa-print mr-2"></i> Save Picture/ Print
                             </button>
                         </div>
                     </div>
@@ -853,6 +863,25 @@
             <h3 id="alertTitle" class="text-2xl font-bold text-gray-800 mb-2"></h3>
             <p id="alertMessage" class="text-gray-600 mb-6 text-lg whitespace-pre-line"></p>
             <button onclick="closeAlert()" id="alertButton" class="w-full text-white py-3 rounded-lg font-bold text-lg transition-colors shadow-sm">ตกลง</button>
+        </div>
+    </div>
+
+    <!-- Print Template -->
+    <div id="printTicketContainer" class="hidden">
+        <div style="width: 80mm; font-family: sans-serif; padding: 10px; color: black;">
+            <div style="text-align: center; border-bottom: 2px dashed #000; padding-bottom: 10px; margin-bottom: 10px;">
+                <h2 style="font-size: 18px; margin: 0;">ใบผ่านทาง / GATE PASS</h2>
+                <p style="font-size: 12px; margin: 5px 0 0 0;" id="printDate"></p>
+            </div>
+            
+            <div style="margin-bottom: 10px;">
+                <p style="font-size: 14px; margin: 3px 0;"><strong>ทะเบียนรถ:</strong> <span id="printPlate"></span></p>
+                <p style="font-size: 14px; margin: 3px 0;"><strong>พนักงานชั่ง:</strong> <span id="printOperator"></span></p>
+            </div>
+
+            <div style="text-align: center; margin-bottom: 10px;">
+                <img id="printImage" src="" style="width: 100%; max-height: 150px; object-fit: contain; border: 1px solid #ccc;">
+            </div>
         </div>
     </div>
     

@@ -108,6 +108,8 @@ class TruckImageCreate(BaseModel):
     license_plate: str
     image_base64: str
     operator_name: Optional[str] = "SCALE"
+    driver_name: Optional[str] = None
+    pallet_quantity: Optional[int] = None
 
 def init_db():
     conn = get_db_connection()
@@ -136,9 +138,11 @@ def init_db():
             id SERIAL PRIMARY KEY,
             license_plate TEXT,
             image_base64 TEXT,
-            truck_weighing_key TEXT, 
+            truck_weighing_key TEXT,
             operator_name TEXT,
-            plant_ticketcode TEXT 
+            plant_ticketcode TEXT,
+            driver_name TEXT,
+            pallet_quantity INTEGER
         )
     ''')
 
@@ -156,19 +160,36 @@ def init_db():
     
     try:
         cursor.execute("ALTER TABLE truck_scale_images ADD COLUMN IF NOT EXISTS truck_weighing_key TEXT")
+        conn.commit()
     except Exception:
         conn.rollback()
-        pass 
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE truck_scale_images ADD COLUMN IF NOT EXISTS driver_name TEXT")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE truck_scale_images ADD COLUMN IF NOT EXISTS pallet_quantity INTEGER")
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        pass
 
     # [จุดที่ 3] จัดการอัปเดตชื่อคอลัมน์จากของเดิม (ถ้ามี) ให้เปลี่ยนเป็นแบบใหม่ทั้งหมด
     try:
         cursor.execute("ALTER TABLE receipt_data RENAME COLUMN plant_short_name TO plant_ticketcode")
+        conn.commit()
     except Exception:
         conn.rollback()
-        pass 
+        pass
 
     try:
         cursor.execute("ALTER TABLE receipt_data ADD COLUMN IF NOT EXISTS calculated_weight NUMERIC DEFAULT 0")
+        conn.commit()
     except Exception:
         conn.rollback()
         pass
@@ -507,6 +528,32 @@ async def save_record(
     except Exception as e:
         return {"success": False, "message": str(e)}
 
+@app.get("/api/driver-names")
+async def get_driver_names(
+    license_plate: str = Query(""),
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        clean_plate = license_plate.strip().replace(" ", "")
+        if not clean_plate:
+            return {"success": True, "data": []}
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT DISTINCT TRIM(CAST("driverName" AS TEXT)) as driver_name
+            FROM truck_weighing
+            WHERE REPLACE(CAST("carRegister" AS TEXT), ' ', '') = %s
+              AND "driverName" IS NOT NULL AND TRIM(CAST("driverName" AS TEXT)) NOT IN ('', 'nan', 'None')
+            ORDER BY driver_name ASC
+        ''', (clean_plate,))
+        rows = cursor.fetchall()
+        conn.close()
+        return {"success": True, "data": [row[0] for row in rows]}
+    except Exception as e:
+        print(f"❌ API Driver Names Error: {e}")
+        return {"success": False, "message": str(e)}
+
 @app.post("/api/save-truck-image")
 async def save_truck_image(
     payload: TruckImageCreate,
@@ -523,24 +570,25 @@ async def save_truck_image(
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         
         cursor.execute('''
-            SELECT "row_key" 
-            FROM truck_weighing 
+            SELECT "row_key"
+            FROM truck_weighing
             WHERE REPLACE(CAST("carRegister" AS TEXT), ' ', '') = %s
               AND ("weightOut" IS NULL OR CAST("weightOut" AS TEXT) = '0' OR CAST("weightOut" AS TEXT) = '' OR "weightOutTime" IS NULL OR CAST("weightOutTime" AS TEXT) = '' OR CAST("weightOutTime" AS TEXT) = '-')
-            ORDER BY "row_key" DESC 
+            ORDER BY "row_key" DESC
             LIMIT 1
         ''', (clean_plate,))
-        
+
         active_truck = cursor.fetchone()
-        
+
         if not active_truck:
             conn.close()
             return {
-                "success": False, 
+                "success": False,
                 "message": f"❌ ไม่พบรถทะเบียน '{payload.license_plate}' ที่กำลังชั่งอยู่ในระบบ\n(รถอาจชั่งออกไปแล้ว หรือทะเบียนไม่ตรงกับใบตาชั่ง)"
             }
-            
+
         truck_row_key = active_truck['row_key']
+        driver_name = (payload.driver_name or '').strip() or '-'
 
         cursor.execute('''
             SELECT id FROM truck_scale_images
@@ -559,15 +607,19 @@ async def save_truck_image(
         created_at = datetime.now(tz_th).strftime("%Y-%m-%d %H:%M:%S")
 
         cursor.execute('''
-            INSERT INTO truck_scale_images (license_plate, image_base64, truck_weighing_key, operator_name, created_at)
-            VALUES (%s, %s, %s, %s, %s)
-        ''', (clean_plate, payload.image_base64, truck_row_key, payload.operator_name, created_at))
+            INSERT INTO truck_scale_images (license_plate, image_base64, truck_weighing_key, operator_name, created_at, driver_name, pallet_quantity)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ''', (clean_plate, payload.image_base64, truck_row_key, payload.operator_name, created_at, driver_name, payload.pallet_quantity))
 
         conn.commit()
         conn.close()
         await manager.broadcast("UPDATE")
 
-        return {"success": True, "message": f"✅ จับคู่และบันทึกรูปรถทะเบียน '{payload.license_plate}' ลงในรอบการชั่งปัจจุบันสำเร็จ!"}
+        return {
+            "success": True,
+            "message": f"✅ จับคู่และบันทึกรูปรถทะเบียน '{payload.license_plate}' ลงในรอบการชั่งปัจจุบันสำเร็จ!",
+            "driver_name": driver_name
+        }
     except Exception as e:
         print(f"❌ API Save Truck Image Error: {e}")
         return {"success": False, "message": str(e)}

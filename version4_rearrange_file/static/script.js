@@ -440,10 +440,21 @@ function resetScaleImage() {
 
 async function saveScaleTruckImage() {
     const licensePlate = document.getElementById('scaleLicensePlateInput').value.trim();
+    const driverName = document.getElementById('scaleDriverNameSelect').value.trim();
+    const palletQuantityRaw = document.getElementById('scalePalletQuantityInput').value.trim();
     if (!licensePlate) {
         showCustomAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณากรอกทะเบียนรถก่อนบันทึกครับ');
         return;
     }
+    if (!driverName) {
+        showCustomAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณาเลือกชื่อคนขับก่อนบันทึกครับ');
+        return;
+    }
+    if (!palletQuantityRaw || isNaN(palletQuantityRaw) || Number(palletQuantityRaw) < 0) {
+        showCustomAlert('warning', 'ข้อมูลไม่ครบ', 'กรุณากรอกจำนวนพาเลทที่บรรทุกมาก่อนบันทึกครับ');
+        return;
+    }
+    const palletQuantity = parseInt(palletQuantityRaw, 10);
     if (!currentScaleImageBase64) {
         showCustomAlert('warning', 'ไม่มีรูปภาพ', 'กรุณาถ่ายรูปภาพก่อนบันทึกครับ');
         return;
@@ -462,14 +473,16 @@ async function saveScaleTruckImage() {
             body: JSON.stringify({
                 license_plate: licensePlate,
                 image_base64: currentScaleImageBase64,
-                operator_name: currentUser
+                operator_name: currentUser,
+                driver_name: driverName,
+                pallet_quantity: palletQuantity
             })
         });
         const res = await response.json();
 
         if (res.success) {
             showCustomAlert('success', 'สำเร็จ!', res.message);
-            document.getElementById('scaleLicensePlateInput').value = "";
+            printImageDocument(currentScaleImageBase64, licensePlate, driverName, palletQuantity);
             resetScaleImage();
         } else {
             showCustomAlert('warning', 'บันทึกไม่สำเร็จ', res.message);
@@ -482,6 +495,63 @@ async function saveScaleTruckImage() {
         btnSave.disabled = false;
         btnSave.classList.remove('opacity-75', 'cursor-not-allowed');
         btnSave.innerHTML = originalContent;
+    }
+}
+
+function printImageDocument(imageSrc, licensePlate, driverName, palletQuantity) {
+    const printFrame = document.createElement('iframe');
+    printFrame.style.position = 'fixed';
+    printFrame.style.right = '0';
+    printFrame.style.bottom = '0';
+    printFrame.style.width = '0';
+    printFrame.style.height = '0';
+    printFrame.style.border = '0';
+    document.body.appendChild(printFrame);
+
+    const printTimestamp = new Date().toLocaleString('th-TH');
+
+    const doc = printFrame.contentWindow.document;
+    doc.open();
+    doc.write(`
+        <html>
+        <head>
+            <title>${licensePlate || 'Truck Scale Image'}</title>
+            <style>
+                body { margin: 0; padding: 16px; font-family: 'Segoe UI', 'Tahoma', sans-serif; text-align: left; }
+                img { display: block; max-width: 100%; margin: 0 0 20px; }
+                .meta p { margin: 0 0 10px; font-size: 18px; line-height: 1.4; text-align: left; }
+                .meta p:last-child { margin-bottom: 0; }
+                .meta strong { font-weight: 600; }
+            </style>
+        </head>
+        <body>
+            <img id="printTargetImage" src="${imageSrc}">
+            <div class="meta">
+                <p><strong>ทะเบียนรถ:</strong> ${licensePlate || '-'}</p>
+                <p><strong>ชื่อคนขับ:</strong> ${driverName || '-'}</p>
+                <p><strong>จำนวนพาเลท:</strong> ${palletQuantity ?? '-'}</p>
+                <p><strong>เวลาพิมพ์:</strong> ${printTimestamp}</p>
+            </div>
+        </body>
+        </html>
+    `);
+    doc.close();
+
+    const cleanup = () => {
+        if (printFrame.parentNode) printFrame.parentNode.removeChild(printFrame);
+    };
+    const triggerPrint = () => {
+        printFrame.contentWindow.focus();
+        printFrame.contentWindow.print();
+        setTimeout(cleanup, 1000);
+    };
+
+    const img = doc.getElementById('printTargetImage');
+    if (img.complete) {
+        triggerPrint();
+    } else {
+        img.onload = triggerPrint;
+        img.onerror = cleanup;
     }
 }
 
@@ -1399,6 +1469,43 @@ function switchScaleTab(tabName) {
         if(btnScale) btnScale.className = "px-6 py-3 font-bold text-teal-600 border-b-4 border-teal-600 transition-colors";
         if(viewScale) viewScale.classList.remove('hidden');
         renderScaleDashboard();
+        loadDriverNameOptions();
+    }
+}
+
+let scaleDriverLookupTimer = null;
+function handleScaleLicensePlateChange() {
+    clearTimeout(scaleDriverLookupTimer);
+    scaleDriverLookupTimer = setTimeout(loadDriverNameOptions, 400);
+}
+
+async function loadDriverNameOptions() {
+    const select = document.getElementById('scaleDriverNameSelect');
+    const licensePlateInput = document.getElementById('scaleLicensePlateInput');
+    if (!select || !licensePlateInput) return;
+
+    const licensePlate = licensePlateInput.value.trim();
+    const previousValue = select.value;
+    select.innerHTML = '<option value="">-- เลือกชื่อคนขับ --</option>';
+
+    if (!licensePlate) return;
+
+    try {
+        const response = await fetchWithAuth(`/api/driver-names?license_plate=${encodeURIComponent(licensePlate)}`);
+        const res = await response.json();
+
+        if (res.success && Array.isArray(res.data)) {
+            res.data.forEach(name => {
+                const option = document.createElement('option');
+                option.value = name;
+                option.textContent = name;
+                select.appendChild(option);
+            });
+        }
+        select.value = previousValue;
+    } catch (err) {
+        if (err.message === "Unauthorized") return;
+        console.error("โหลดรายชื่อคนขับไม่สำเร็จ:", err);
     }
 }
 
