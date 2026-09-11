@@ -1,0 +1,40 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      # ต้องตรงกับ owner ("pallet_db_r2dx_user") ที่ระบุอยู่ใน backup.sql
+      # ไม่งั้นตอน restore คำสั่ง ALTER ... OWNER TO จะ error เพราะ role ไม่มีอยู่จริง
+      POSTGRES_USER: pallet_db_r2dx_user
+      POSTGRES_PASSWORD: pallet_local_pw
+      POSTGRES_DB: pallet_db_r2dx
+    volumes:
+      # PostgreSQL image เวอร์ชัน 18+ ต้อง mount ที่ /var/lib/postgresql (ไม่ใช่ .../data)
+      - pgdata:/var/lib/postgresql
+      # รันครั้งแรกที่สร้าง volume เท่านั้น (postgres image จะ import ไฟล์ .sql ใน
+      # /docker-entrypoint-initdb.d ให้อัตโนมัติแค่ตอนที่ data directory ยังว่างอยู่)
+      - ./backup.sql:/docker-entrypoint-initdb.d/backup.sql:ro
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pallet_db_r2dx_user -d pallet_db_r2dx"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build: .
+    ports:
+      - "8002:8000"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

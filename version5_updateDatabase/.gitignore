@@ -1,0 +1,11 @@
+.env
+__pycache__/
+venv/
+database/receipts.db
+database/receipts2.db
+database/receipts3.db
+database/receipts4.db
+main_backup2.py
+
+# Local DB seed dump (large, regenerate with pg_dump / restore into local docker db)
+backup.sql
