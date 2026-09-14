@@ -440,8 +440,29 @@
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
-                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex flex-col gap-3">
                         <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-truck-moving mr-2"></i> ประวัติรถเข้า-ออก</h2>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <input type="text" id="adminScaleHistoryPlateFilter" placeholder="ค้นหาทะเบียนรถ..." oninput="handleScaleHistoryFilterChange('admin')" class="flex-1 p-2.5 border border-gray-300 rounded-lg text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white uppercase">
+                            <input type="date" id="adminScaleHistoryDateFilter" onchange="handleScaleHistoryFilterChange('admin')" class="flex-1 p-2.5 border border-gray-300 rounded-lg text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+                            <button onclick="clearScaleHistoryFilter('admin')" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-bold transition-colors">
+                                <i class="fa-solid fa-xmark mr-1"></i> ล้างตัวกรอง
+                            </button>
+                        </div>
+                        <div id="adminScaleHistoryStatusFilter" class="flex flex-wrap gap-2">
+                            <button data-status="" onclick="setScaleHistoryStatus('admin', '')" class="px-4 py-2 rounded-lg text-sm font-bold bg-teal-600 text-white shadow-sm transition-colors">
+                                ทั้งหมด
+                            </button>
+                            <button data-status="return" onclick="setScaleHistoryStatus('admin', 'return')" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-pallet mr-1"></i> คืนพาเลท
+                            </button>
+                            <button data-status="pending" onclick="setScaleHistoryStatus('admin', 'pending')" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-hourglass-half mr-1"></i> รอชั่งออก
+                            </button>
+                            <button data-status="pickup" onclick="setScaleHistoryStatus('admin', 'pickup')" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-box mr-1"></i> ไม่ใช่คืนพาเลท
+                            </button>
+                        </div>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm text-gray-600 whitespace-nowrap">
@@ -449,15 +470,16 @@
                                 <tr>
                                     <th class="px-4 py-3">เลขที่เอกสารอ้างอิง</th>
                                     <th class="px-4 py-3">ทะเบียนรถ</th>
+                                    <th class="px-4 py-3 text-center">สถานะ</th>
                                     <th class="px-4 py-3">เวลาเข้า</th>
-                                    <th class="px-4 py-3 text-right text-blue-600">น้ำหนักเข้า (กก.)</th>
                                     <th class="px-4 py-3">เวลาออก</th>
+                                    <th class="px-4 py-3 text-right text-blue-600">น้ำหนักเข้า (กก.)</th>
                                     <th class="px-4 py-3 text-right text-purple-600">น้ำหนักออก (กก.)</th>
-                                    <th class="px-4 py-3 text-right text-green-600">น้ำหนักพาเลท (กก.)</th>
+                                    <th class="px-4 py-3 text-right text-green-600">น้ำหนักสุทธิ (กก.)</th>
                                     <th class="px-4 py-3 text-center">รูปรถ (Scale)</th>
                                 </tr>
                             </thead>
-                            <tbody id="scaleRecordTableBody" class="divide-y divide-gray-200 bg-white">
+                            <tbody id="adminScaleRecordTableBody" class="divide-y divide-gray-200 bg-white">
                             </tbody>
                         </table>
                     </div>
@@ -746,8 +768,29 @@
                 </div>
 
                 <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mt-4">
-                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
+                    <div class="bg-gray-50 p-4 border-b border-gray-200 flex flex-col gap-3">
                         <h2 class="text-lg font-semibold text-gray-700"><i class="fa-solid fa-truck-moving mr-2"></i> ประวัติรถเข้า-ออก</h2>
+                        <div class="flex flex-col sm:flex-row gap-3">
+                            <input type="text" id="scaleHistoryPlateFilter" placeholder="ค้นหาทะเบียนรถ..." oninput="handleScaleHistoryFilterChange('scale')" class="flex-1 p-2.5 border border-gray-300 rounded-lg text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white uppercase">
+                            <input type="date" id="scaleHistoryDateFilter" onchange="handleScaleHistoryFilterChange('scale')" class="flex-1 p-2.5 border border-gray-300 rounded-lg text-sm font-semibold text-gray-800 focus:outline-none focus:ring-2 focus:ring-teal-500 bg-white">
+                            <button onclick="clearScaleHistoryFilter('scale')" class="text-sm bg-gray-100 hover:bg-gray-200 text-gray-600 px-4 py-2 rounded-lg font-bold transition-colors">
+                                <i class="fa-solid fa-xmark mr-1"></i> ล้างตัวกรอง
+                            </button>
+                        </div>
+                        <div id="scaleHistoryStatusFilter" class="flex flex-wrap gap-2">
+                            <button data-status="" onclick="setScaleHistoryStatus('scale', '')" class="px-4 py-2 rounded-lg text-sm font-bold bg-teal-600 text-white shadow-sm transition-colors">
+                                ทั้งหมด
+                            </button>
+                            <button data-status="return" onclick="setScaleHistoryStatus('scale', 'return')" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-pallet mr-1"></i> คืนพาเลท
+                            </button>
+                            <button data-status="pending" onclick="setScaleHistoryStatus('scale', 'pending')" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-hourglass-half mr-1"></i> รอชั่งออก
+                            </button>
+                            <button data-status="pickup" onclick="setScaleHistoryStatus('scale', 'pickup')" class="px-4 py-2 rounded-lg text-sm font-bold bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors">
+                                <i class="fa-solid fa-box mr-1"></i> ไม่ใช่คืนพาเลท
+                            </button>
+                        </div>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left text-sm text-gray-600 whitespace-nowrap">
@@ -755,6 +798,7 @@
                                 <tr>
                                     <th class="px-4 py-3">เลขที่เอกสารอ้างอิง</th>
                                     <th class="px-4 py-3">ทะเบียนรถ</th>
+                                    <th class="px-4 py-3 text-center">สถานะ</th>
                                     <th class="px-4 py-3">เวลาเข้า</th>
                                     <th class="px-4 py-3">เวลาออก</th>
                                     <th class="px-4 py-3 text-right text-blue-600">น้ำหนักเข้า (กก.)</th>

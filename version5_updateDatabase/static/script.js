@@ -47,7 +47,9 @@ let globalAdminData = [];
 let isDailyDiscrepancyFilterOn = false;
 
 let allPallets = [];
-let selectedPalletValue = ""; 
+let selectedPalletValue = "";
+// addPallet/removeItem อ้าง div#emptyState เสมอ ทุกที่ที่ล้าง palletList ต้องวาง markup นี้กลับไปด้วย
+const PALLET_EMPTY_STATE_HTML = `<div id="emptyState" class="p-8 text-center text-gray-400"><i class="fa-solid fa-clipboard-list text-4xl mb-3 text-gray-200"></i><p class="text-sm">รอถ่ายรูปใบนำส่ง และเพิ่มประเภทพาเลท</p></div>`;
 
 let currentScaleImageBase64 = "";
 let adminWs = null;
@@ -484,7 +486,7 @@ async function saveScaleTruckImage() {
             showCustomAlert('success', 'สำเร็จ!', res.message);
             printImageDocument(currentScaleImageBase64, licensePlate, driverName, palletQuantity);
             resetScaleImage();
-            renderTrucksInPlant();
+            renderScaleHistory('scale');
         } else {
             showCustomAlert('warning', 'บันทึกไม่สำเร็จ', res.message);
         }
@@ -882,7 +884,8 @@ async function confirmCropAndProcess() {
             btnAdd.disabled = false;
             btnAdd.className = "bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center transition-all active:scale-95 shadow-sm";
 
-            document.getElementById('palletList').innerHTML = `<div id="emptyState" class="p-8 text-center text-gray-400" style="display: none;"><i class="fa-solid fa-clipboard-list text-4xl mb-3 text-gray-200"></i><p class="text-sm">รอถ่ายรูปใบนำส่ง และเพิ่มประเภทพาเลท</p></div>`;
+            document.getElementById('palletList').innerHTML = PALLET_EMPTY_STATE_HTML;
+            document.getElementById('emptyState').style.display = 'none';
             palletCount = 0;
 
             let mfg = (data.pallets_returned && data.pallets_returned.manufacturer) ? data.pallets_returned.manufacturer : "";
@@ -914,7 +917,7 @@ async function confirmCropAndProcess() {
                         <div class="flex items-center gap-3">
                             <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden h-12 bg-white shadow-sm">
                                 <button onclick="updateQty('${itemId}', -1)" class="px-4 py-2 bg-gray-100 font-bold border-r h-full active:bg-gray-300"><i class="fa-solid fa-minus"></i></button>
-                                <input type="number" id="qty-${itemId}" value="${defaultQty}" min="1" class="qty-input w-20 text-center font-bold text-xl h-full outline-none text-green-700">
+                                <input type="number" id="qty-${itemId}" value="${defaultQty}" min="0" class="qty-input w-20 text-center font-bold text-xl h-full outline-none text-green-700">
                                 <button onclick="updateQty('${itemId}', 1)" class="px-4 py-2 bg-gray-100 font-bold border-l h-full active:bg-gray-300"><i class="fa-solid fa-plus"></i></button>
                             </div>
                             <button onclick="removeItem('${itemId}')" class="text-red-500 hover:text-red-700 p-3 bg-white border border-red-100 rounded-lg shadow-sm"><i class="fa-solid fa-trash-can text-xl"></i></button>
@@ -999,7 +1002,7 @@ function executeRetakeImage() {
     }
 
     palletCount = 0;
-    document.getElementById('palletList').innerHTML = `<div id="emptyState" class="p-8 text-center text-gray-400"><i class="fa-solid fa-clipboard-list text-4xl mb-3 text-gray-200"></i><p class="text-sm">รอถ่ายรูปใบนำส่ง และเพิ่มประเภทพาเลท</p></div>`;
+    document.getElementById('palletList').innerHTML = PALLET_EMPTY_STATE_HTML;
     document.getElementById('totalItems').innerText = `0 รายการ`;
 }
 
@@ -1068,7 +1071,7 @@ function addPallet() {
             <div class="flex items-center gap-3">
                 <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden h-12 bg-white">
                     <button onclick="updateQty('${itemId}', -1)" class="px-4 py-2 bg-gray-100 font-bold border-r h-full active:bg-gray-300"><i class="fa-solid fa-minus"></i></button>
-                    <input type="number" id="qty-${itemId}" value="10" min="1" class="qty-input w-20 text-center font-bold text-xl h-full outline-none">
+                    <input type="number" id="qty-${itemId}" value="0" min="0" class="qty-input w-20 text-center font-bold text-xl h-full outline-none">
                     <button onclick="updateQty('${itemId}', 1)" class="px-4 py-2 bg-gray-100 font-bold border-l h-full active:bg-gray-300"><i class="fa-solid fa-plus"></i></button>
                 </div>
                 <button onclick="removeItem('${itemId}')" class="text-red-500 hover:text-red-700 p-3 bg-red-50 rounded-lg"><i class="fa-solid fa-trash-can text-xl"></i></button>
@@ -1090,7 +1093,7 @@ function resetCustomSelect() {
 function updateQty(itemId, change) {
     const input = document.getElementById(`qty-${itemId}`);
     let val = parseInt(input.value) || 0;
-    if (val + change >= 1) {
+    if (val + change >= 0) {
         input.value = val + change;
         input.classList.remove('flash-green'); void input.offsetWidth; input.classList.add('flash-green');
     }
@@ -1235,7 +1238,9 @@ async function editRecord(recordId) {
         isOcrScanned = true;
         currentDocNumber = record.documentNumber;
         ocrExpectedQty = record.expectedQty;
-        currentImageBase64 = record.imageBase64;
+        // ต้องโหลดรูปเดิมกลับมาก่อน เพราะตอนกดบันทึกจะส่ง currentImageBase64 ทับของเดิมในฐานข้อมูล
+        // ถ้าปล่อยว่างไว้ รูปเดิมของรายการนั้นจะหายทันทีที่แก้ไข
+        currentImageBase64 = record.hasImage ? await fetchReceiptImage(recordId) : null;
         currentCropImageBase64 = "";
         currentPlantTicketcode = record.plant_ticketcode || ""; 
         
@@ -1260,8 +1265,9 @@ async function editRecord(recordId) {
         document.getElementById('btnAdd').className = "bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center transition-all active:scale-95 shadow-sm";
 
         palletCount = 0;
-        document.getElementById('emptyState').style.display = 'none';
-        document.getElementById('palletList').innerHTML = ''; 
+        // ต้องคง div#emptyState ไว้เหมือนโหมดปกติ เพราะ addPallet/removeItem อ้างถึง element นี้
+        // ถ้าล้าง palletList ทิ้งทั้งหมด ปุ่ม "เพิ่ม" จะพังเงียบๆ กดแล้วไม่มีอะไรเกิดขึ้น
+        document.getElementById('palletList').innerHTML = PALLET_EMPTY_STATE_HTML;
 
         if(record.palletDetails && record.palletDetails.length > 0) {
             record.palletDetails.forEach(p => {
@@ -1273,7 +1279,7 @@ async function editRecord(recordId) {
                         <div class="flex items-center gap-3">
                             <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden h-12 bg-white">
                                 <button onclick="updateQty('${itemId}', -1)" class="px-4 py-2 bg-gray-100 font-bold border-r h-full active:bg-gray-300"><i class="fa-solid fa-minus"></i></button>
-                                <input type="number" id="qty-${itemId}" value="${p.qty}" min="1" class="qty-input w-20 text-center font-bold text-xl h-full outline-none">
+                                <input type="number" id="qty-${itemId}" value="${p.qty}" min="0" class="qty-input w-20 text-center font-bold text-xl h-full outline-none">
                                 <button onclick="updateQty('${itemId}', 1)" class="px-4 py-2 bg-gray-100 font-bold border-l h-full active:bg-gray-300"><i class="fa-solid fa-plus"></i></button>
                             </div>
                             <button onclick="removeItem('${itemId}')" class="text-red-500 hover:text-red-700 p-3 bg-red-50 rounded-lg"><i class="fa-solid fa-trash-can text-xl"></i></button>
@@ -1282,6 +1288,7 @@ async function editRecord(recordId) {
                 document.getElementById('palletList').insertAdjacentHTML('beforeend', html);
             });
         }
+        document.getElementById('emptyState').style.display = palletCount === 0 ? 'block' : 'none';
         document.getElementById('totalItems').innerText = `${palletCount} รายการ`;
         window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -1385,8 +1392,8 @@ async function renderCheckerHistory() {
 
             html += `
                 <div class="${bgClass} rounded-xl p-5 shadow-sm border flex flex-col sm:flex-row gap-5 transition-transform hover:-translate-y-1">
-                    <div class="relative flex-shrink-0 cursor-pointer group sm:w-40" onclick="openImageModal('${record.imageBase64 || ''}')">
-                        <img src="${record.imageBase64 || 'https://via.placeholder.com/150x200?text=No+Image'}" class="w-full h-40 sm:h-full object-cover rounded-lg border border-gray-300 shadow-sm group-hover:brightness-90 transition-all">
+                    <div class="relative flex-shrink-0 cursor-pointer group sm:w-40" onclick="openReceiptImage(${record.id})">
+                        <img ${record.hasImage ? `data-receipt-id="${record.id}"` : ''} src="https://via.placeholder.com/150x200?text=No+Image" class="w-full h-40 sm:h-full object-cover rounded-lg border border-gray-300 shadow-sm group-hover:brightness-90 transition-all">
                         <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                             <i class="fa-solid fa-magnifying-glass-plus text-white text-2xl drop-shadow-md"></i>
                         </div>
@@ -1413,6 +1420,7 @@ async function renderCheckerHistory() {
                 </div>`;
         });
         container.innerHTML = html;
+        lazyLoadReceiptImages(container);
     } catch (error) {
         if (error.message === "Unauthorized") return;
         console.error("โหลดประวัติไม่สำเร็จ", error);
@@ -1435,8 +1443,9 @@ function initAdminDashboard() {
                     console.log("ได้รับสัญญาณอัปเดตจากเซิร์ฟเวอร์! ดึงข้อมูลล่าสุด...");
                     await updateAdminDashboard();
                     generateMonthlyReport();
-                    renderScaleDashboard();
-                    renderTrucksInPlant();
+                    // ตัวที่ไม่ได้เปิดอยู่จะข้ามไปเอง ไม่ยิง API ทิ้ง
+                    renderScaleHistory('admin');
+                    renderScaleHistory('scale');
                 }
             }
         };
@@ -1480,7 +1489,7 @@ function switchScaleTab(tabName) {
     } else if (tabName === 'scale') {
         if(btnScale) btnScale.className = "px-6 py-3 font-bold text-teal-600 border-b-4 border-teal-600 transition-colors";
         if(viewScale) viewScale.classList.remove('hidden');
-        renderTrucksInPlant();
+        renderScaleHistory('scale');
         loadDriverNameOptions();
     }
 }
@@ -1490,8 +1499,55 @@ function handleScaleLicensePlateChange() {
     clearTimeout(scaleDriverLookupTimer);
     scaleDriverLookupTimer = setTimeout(() => {
         loadDriverNameOptions();
-        renderTrucksInPlant();
     }, 400);
+}
+
+// ตาราง "ประวัติรถเข้า-ออก" ใช้ทั้งหน้า scale และหน้า admin ใช้ renderer ตัวเดียวกัน
+// ต่างกันแค่ id ของ element เพื่อไม่ให้ต้องดูแลโค้ดสองชุด
+const SCALE_HISTORY_VIEWS = {
+    scale: {
+        tbody: 'scalePageScaleRecordTableBody',
+        plateInput: 'scaleHistoryPlateFilter',
+        dateInput: 'scaleHistoryDateFilter',
+        statusBar: 'scaleHistoryStatusFilter',
+        status: '',
+        timer: null
+    },
+    admin: {
+        tbody: 'adminScaleRecordTableBody',
+        plateInput: 'adminScaleHistoryPlateFilter',
+        dateInput: 'adminScaleHistoryDateFilter',
+        statusBar: 'adminScaleHistoryStatusFilter',
+        status: '',
+        timer: null
+    }
+};
+
+const SCALE_STATUS_BTN_ACTIVE = 'px-4 py-2 rounded-lg text-sm font-bold bg-teal-600 text-white shadow-sm transition-colors';
+const SCALE_STATUS_BTN_IDLE = 'px-4 py-2 rounded-lg text-sm font-bold bg-white text-gray-600 border border-gray-300 hover:bg-gray-50 transition-colors';
+
+function handleScaleHistoryFilterChange(viewKey) {
+    const view = SCALE_HISTORY_VIEWS[viewKey];
+    clearTimeout(view.timer);
+    view.timer = setTimeout(() => renderScaleHistory(viewKey), 400);
+}
+
+function setScaleHistoryStatus(viewKey, status) {
+    const view = SCALE_HISTORY_VIEWS[viewKey];
+    view.status = status;
+    document.querySelectorAll(`#${view.statusBar} button`).forEach(btn => {
+        btn.className = (btn.dataset.status === status) ? SCALE_STATUS_BTN_ACTIVE : SCALE_STATUS_BTN_IDLE;
+    });
+    renderScaleHistory(viewKey);
+}
+
+function clearScaleHistoryFilter(viewKey) {
+    const view = SCALE_HISTORY_VIEWS[viewKey];
+    const plateFilterInput = document.getElementById(view.plateInput);
+    const dateFilterInput = document.getElementById(view.dateInput);
+    if (plateFilterInput) plateFilterInput.value = '';
+    if (dateFilterInput) dateFilterInput.value = '';
+    setScaleHistoryStatus(viewKey, '');
 }
 
 async function loadDriverNameOptions() {
@@ -1553,7 +1609,7 @@ function switchAdminTab(tabName) {
     } else if (tabName === 'scale') {
         btnScale.className = "px-6 py-3 font-bold text-teal-600 border-b-4 border-teal-600 transition-colors";
         viewScale.classList.remove('hidden');
-        renderScaleDashboard();
+        renderScaleHistory('admin');
     } else if (tabName === 'users') {
         btnUsers.className = "px-6 py-3 font-bold text-purple-600 border-b-4 border-purple-600 transition-colors";
         viewUsers.classList.remove('hidden');
@@ -1614,9 +1670,8 @@ async function updateAdminDashboard(page=1) {
         
         if (!result.success) return;
         
-        globalAdminData = result.data; 
-        renderAdminDashboard(); 
-        renderScaleDashboard();
+        globalAdminData = result.data;
+        renderAdminDashboard();
     } catch (error) {
         if (error.message === "Unauthorized") return;
         console.error("ไม่สามารถโหลดข้อมูล Admin Dashboard ได้:", error);
@@ -1740,7 +1795,7 @@ function renderAdminDashboard() {
                 <td class="px-4 py-3 font-bold text-gray-800">${record.documentNumber}</td>
                 <td class="px-4 py-3 text-sm">${record.date}</td>
                 <td class="px-4 py-3 truncate max-w-xs text-sm" title="${record.customer_name}">${record.customer_name}</td>
-                <td class="px-4 py-3 text-sm text-purple-700 font-semibold">${record.plant_ticketcode || '-'}</td>
+                <td class="px-4 py-3 text-sm text-purple-700 font-semibold">${record.plant_name || '-'}</td>
                 <td class="px-4 py-3 text-center text-sm">${record.checkerName}</td>
                 <td class="px-4 py-3 text-right">${record.expectedQty}</td>
                 <td class="px-4 py-3 text-right ${statusColor}">${record.actualQty}</td>
@@ -1748,9 +1803,9 @@ function renderAdminDashboard() {
                 <td class="px-4 py-3 text-right font-bold text-green-700">${record.calculated_weight ? record.calculated_weight.toLocaleString() : '0'}</td>
                 <td class="px-4 py-2">${palletItemsHtml}</td>
                 <td class="px-4 py-3 text-center">
-                    <button onclick="openImageModal('${record.imageBase64 || ''}')" class="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition-colors" title="ดูรูปภาพ">
-                        <i class="fa-solid fa-image"></i>
-                    </button>
+                    ${record.hasImage
+                        ? `<button onclick="openReceiptImage(${record.id})" class="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition-colors" title="ดูรูปภาพ"><i class="fa-solid fa-image"></i></button>`
+                        : `<span class="text-gray-400 text-xs italic">ไม่มีรูป</span>`}
                 </td>
             </tr>`;
     });
@@ -1844,7 +1899,7 @@ async function generateMonthlyReport() {
                     <td class="px-4 py-3 font-bold text-gray-800">${record.documentNumber}</td>
                     <td class="px-4 py-3 text-sm">${record.date}</td>
                     <td class="px-4 py-3 truncate max-w-xs text-sm" title="${record.customer_name}">${record.customer_name}</td>
-                    <td class="px-4 py-3 text-sm text-purple-700 font-semibold">${record.plant_short_name || '-'}</td>
+                    <td class="px-4 py-3 text-sm text-purple-700 font-semibold">${record.plant_name || '-'}</td>
                     <td class="px-4 py-3 text-center text-sm">${record.checkerName}</td>
                     <td class="px-4 py-3 text-right">${record.expectedQty}</td>
                     <td class="px-4 py-3 text-right ${statusColor}">${record.actualQty}</td>
@@ -1852,9 +1907,9 @@ async function generateMonthlyReport() {
                     <td class="px-4 py-3 text-right font-bold text-green-700">${record.calculated_weight ? record.calculated_weight.toLocaleString() : '0'}</td>
                     <td class="px-4 py-2">${palletItemsHtml}</td>
                     <td class="px-4 py-3 text-center">
-                        <button onclick="openImageModal('${record.imageBase64 || ''}')" class="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition-colors" title="ดูรูปภาพ">
-                            <i class="fa-solid fa-image"></i>
-                        </button>
+                        ${record.hasImage
+                            ? `<button onclick="openReceiptImage(${record.id})" class="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 p-2 rounded-lg transition-colors" title="ดูรูปภาพ"><i class="fa-solid fa-image"></i></button>`
+                            : `<span class="text-gray-400 text-xs italic">ไม่มีรูป</span>`}
                     </td>
                 </tr>`;
         });
@@ -1867,61 +1922,31 @@ async function generateMonthlyReport() {
     }
 }
 
-function renderScaleDashboard() {
-    if (!globalAdminData) return;
-    const db = globalAdminData;
+const TRUCK_STATUS_BADGE = {
+    pending: { label: 'รอชั่งออก', icon: 'fa-hourglass-half', cls: 'bg-amber-100 text-amber-800', hint: 'ถ่ายรูปแล้ว รถยังอยู่ในโรงงาน รอชั่งออก' },
+    return:  { label: 'คืนพาเลท', icon: 'fa-pallet', cls: 'bg-green-100 text-green-800', hint: 'ชั่งออกแล้ว น้ำหนักลดลง = น้ำหนักพาเลทที่คืน' },
+    pickup:  { label: 'ไม่ใช่คืนพาเลท', icon: 'fa-box', cls: 'bg-gray-100 text-gray-600', hint: 'ชั่งออกแล้ว น้ำหนักเพิ่มขึ้น = รถรับของออกไป ไม่ใช่การคืนพาเลท' }
+};
 
-    const tableBody = document.getElementById('scaleRecordTableBody');
-
-    if(db.length === 0) {
-        const emptyMsg = `<tr><td colspan="8" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลรถบรรทุก</td></tr>`;
-        if(tableBody) tableBody.innerHTML = emptyMsg;
-        return;
-    }
-
-    let html = '';
-    db.forEach(record => {
-        const truck = record.truckDetail || {}; 
-        const truckImg = truck.truck_image_base64;
-        
-        let scaleImgBtn = '';
-        if (truckImg) {
-            scaleImgBtn = `
-                <button onclick="openImageModal('${truckImg}')" 
-                        class="text-teal-700 hover:text-teal-900 bg-teal-100 hover:bg-teal-200 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors shadow-sm inline-flex items-center">
-                    <i class="fa-solid fa-image mr-1"></i> ดูรูปรถ
-                </button>`;
-        } else {
-            scaleImgBtn = `<span class="text-gray-400 text-xs italic">ยังไม่มีรูป</span>`;
-        }
-
-        html += `
-            <tr class="hover:bg-teal-50 transition-colors border-b border-gray-100">
-                <td class="px-4 py-3 font-bold text-gray-800">${record.documentNumber}</td>
-                <td class="px-4 py-3 font-bold text-teal-700 bg-teal-50 rounded-md">${truck.license_plate || '-'}</td>
-                <td class="px-4 py-3 text-sm">${truck.weight_in_time || '-'}</td>
-                <td class="px-4 py-3 text-right font-semibold text-blue-700">${truck.weight_in || '0'}</td>
-                <td class="px-4 py-3 text-sm">${truck.weight_out_time || 'รอรถออก'}</td>
-                <td class="px-4 py-3 text-right font-semibold text-purple-700">${truck.weight_out || '0'}</td>
-                
-                <!-- 👇 เพิ่มคอลัมน์แสดงน้ำหนักพาเลทที่รับมาจาก API ตรงนี้ 👇 -->
-                <td class="px-4 py-3 text-right font-extrabold text-green-600">${truck.pallet_weight !== undefined ? truck.pallet_weight : '0'}</td>
-
-                <td class="px-4 py-3 text-center">${scaleImgBtn}</td>
-            </tr>`;
-    });
-    if(tableBody) tableBody.innerHTML = html;
-}
-
-async function renderTrucksInPlant() {
-    const tableBody = document.getElementById('scalePageScaleRecordTableBody');
+async function renderScaleHistory(viewKey) {
+    const view = SCALE_HISTORY_VIEWS[viewKey];
+    const tableBody = document.getElementById(view.tbody);
     if (!tableBody) return;
+    // ตารางถูกซ่อนอยู่ (อยู่คนละแท็บ) ไม่ต้องยิง API ให้เปลืองตอน WebSocket broadcast
+    if (tableBody.offsetParent === null) return;
 
     try {
-        const licensePlateInput = document.getElementById('scaleLicensePlateInput');
-        const licensePlate = licensePlateInput ? licensePlateInput.value.trim() : '';
-        const url = licensePlate
-            ? `/api/truck-scale-history?license_plate=${encodeURIComponent(licensePlate)}`
+        const plateFilterInput = document.getElementById(view.plateInput);
+        const dateFilterInput = document.getElementById(view.dateInput);
+        const plateFilter = plateFilterInput ? plateFilterInput.value.trim() : '';
+        const dateFilter = dateFilterInput ? dateFilterInput.value.trim() : '';
+
+        const params = new URLSearchParams();
+        if (plateFilter) params.set('license_plate', plateFilter);
+        if (dateFilter) params.set('date', dateFilter);
+        if (view.status) params.set('status', view.status);
+        const url = params.toString()
+            ? `/api/truck-scale-history?${params.toString()}`
             : '/api/truck-scale-history';
 
         const response = await fetchWithAuth(url);
@@ -1931,7 +1956,7 @@ async function renderTrucksInPlant() {
         const data = result.data || [];
 
         if (data.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="8" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลรถบรรทุก</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="9" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลรถบรรทุก</td></tr>`;
             return;
         }
 
@@ -1940,9 +1965,9 @@ async function renderTrucksInPlant() {
         let html = '';
         data.forEach(truck => {
             let scaleImgBtn = '';
-            if (truck.truckImageBase64) {
+            if (truck.imageId) {
                 scaleImgBtn = `
-                    <button onclick="openImageModal('${truck.truckImageBase64}')"
+                    <button onclick="openTruckImage(${truck.imageId})"
                             class="text-teal-700 hover:text-teal-900 bg-teal-100 hover:bg-teal-200 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors shadow-sm inline-flex items-center">
                         <i class="fa-solid fa-image mr-1"></i> ดูรูปรถ
                     </button>`;
@@ -1950,22 +1975,86 @@ async function renderTrucksInPlant() {
                 scaleImgBtn = `<span class="text-gray-400 text-xs italic">ยังไม่มีรูป</span>`;
             }
 
+            const badge = TRUCK_STATUS_BADGE[truck.status];
+            const netClass = {
+                pending: 'text-amber-600 font-semibold italic',
+                return: 'text-green-600 font-extrabold',
+                pickup: 'text-gray-500 font-semibold'
+            }[truck.status];
+
             html += `
                 <tr class="hover:bg-teal-50 transition-colors border-b border-gray-100">
                     <td class="px-4 py-3 font-bold text-gray-800">${truck.documentRef}</td>
                     <td class="px-4 py-3 font-bold text-teal-700 bg-teal-50 rounded-md">${truck.licensePlate}</td>
+                    <td class="px-4 py-3 text-center">
+                        <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-bold ${badge.cls}" title="${badge.hint}">
+                            <i class="fa-solid ${badge.icon} mr-1"></i> ${badge.label}
+                        </span>
+                    </td>
                     <td class="px-4 py-3 text-sm">${truck.weightInTime}</td>
                     <td class="px-4 py-3 text-sm">${truck.weightOutTime}</td>
                     <td class="px-4 py-3 text-right font-semibold text-blue-700">${fmt(truck.weightIn)}</td>
                     <td class="px-4 py-3 text-right font-semibold text-purple-700">${fmt(truck.weightOut)}</td>
-                    <td class="px-4 py-3 text-right font-extrabold text-green-600">${fmt(truck.netWeight)}</td>
+                    <td class="px-4 py-3 text-right ${netClass}">${fmt(truck.netWeight)}</td>
                     <td class="px-4 py-3 text-center">${scaleImgBtn}</td>
                 </tr>`;
         });
         tableBody.innerHTML = html;
     } catch (error) {
         if (error.message === "Unauthorized") return;
-        console.error("ไม่สามารถโหลดข้อมูลรถในโรงงานได้:", error);
+        console.error("ไม่สามารถโหลดประวัติรถเข้า-ออกได้:", error);
+    }
+}
+
+async function fetchReceiptImage(recordId) {
+    try {
+        const response = await fetchWithAuth(`/api/receipt-image/${recordId}`);
+        const result = await response.json();
+        return result.success ? result.image_base64 : null;
+    } catch (error) {
+        if (error.message !== "Unauthorized") console.error("โหลดรูปใบรับพาเลทไม่สำเร็จ:", error);
+        return null;
+    }
+}
+
+async function openReceiptImage(recordId) {
+    const imageBase64 = await fetchReceiptImage(recordId);
+    if (imageBase64) {
+        openImageModal(imageBase64);
+    } else {
+        showCustomAlert('warning', 'ไม่พบรูปภาพ', 'ไม่สามารถโหลดรูปใบรับพาเลทได้');
+    }
+}
+
+// โหลดรูปย่อเฉพาะการ์ดที่เลื่อนมาถึงจริงๆ การ์ดที่ยังไม่ได้ดูจะไม่กินแบนด์วิดท์
+let receiptImageObserver = null;
+function lazyLoadReceiptImages(container) {
+    if (receiptImageObserver) receiptImageObserver.disconnect();
+    receiptImageObserver = new IntersectionObserver((entries, observer) => {
+        entries.forEach(async entry => {
+            if (!entry.isIntersecting) return;
+            const img = entry.target;
+            observer.unobserve(img);
+            const imageBase64 = await fetchReceiptImage(img.dataset.receiptId);
+            if (imageBase64) img.src = imageBase64;
+        });
+    }, { rootMargin: '200px' });
+    container.querySelectorAll('img[data-receipt-id]').forEach(img => receiptImageObserver.observe(img));
+}
+
+// โหลดรูปเฉพาะตอนกดดู เพื่อไม่ให้ตอนโหลดตารางต้องดึง base64 มาทุกแถว
+async function openTruckImage(imageId) {
+    try {
+        const response = await fetchWithAuth(`/api/truck-scale-image/${imageId}`);
+        const result = await response.json();
+        if (result.success) {
+            openImageModal(result.image_base64);
+        } else {
+            showCustomAlert('warning', 'ไม่พบรูปภาพ', result.message || 'ไม่สามารถโหลดรูปรถได้');
+        }
+    } catch (error) {
+        if (error.message === "Unauthorized") return;
+        showCustomAlert('warning', 'เกิดข้อผิดพลาด', 'ไม่สามารถโหลดรูปรถได้');
     }
 }
 

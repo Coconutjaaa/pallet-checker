@@ -256,8 +256,11 @@ class ExcelFileHandler(FileSystemEventHandler):
         if not event.is_directory and event.src_path.endswith((".xlsx", ".xls")):
             filename = os.path.basename(event.src_path)
             if filename in ["PalletControl_PalletDelivery.xlsx", "Weighing_TruckWeighing.xlsx"]:
-                time.sleep(1) 
+                time.sleep(1)
                 load_transaction_data()
+            elif filename in ["MasterData_Pallet.xlsx", "MasterData_Plant.xlsx"]:
+                time.sleep(1)
+                load_master_data()
 
 API_KEY = os.getenv("GEMINI_API_KEY")
 if API_KEY:
@@ -276,7 +279,10 @@ def startup_event():
 
     if DATABASE_URL:
         init_db()
-    
+        # โหลดข้อมูลล่าสุดจากไฟล์ Excel ทับข้อมูลเก่าที่มาจาก backup.sql ทุกครั้งที่แอปสตาร์ท
+        load_master_data()
+        load_transaction_data()
+
     folder_to_watch = os.path.join(os.getcwd(), "database", "truckscale")
     if os.path.exists(folder_to_watch):
         event_handler = ExcelFileHandler()
@@ -540,11 +546,19 @@ async def get_driver_names(
 
         conn = get_db_connection()
         cursor = conn.cursor()
+        # ตัดค่าที่ระบบตาชั่งใส่มาเอง (System Generated, AUTO-GEN, ขีด, ตัวเลขล้วน) ออก
+        # ให้เหลือเฉพาะชื่อคนขับจริง ชื่อเล่นสั้นๆ อย่าง 'สี' 'นพ' ต้องไม่โดนตัด
         cursor.execute('''
             SELECT DISTINCT TRIM(CAST("driverName" AS TEXT)) as driver_name
             FROM truck_weighing
             WHERE REPLACE(CAST("carRegister" AS TEXT), ' ', '') = %s
-              AND "driverName" IS NOT NULL AND TRIM(CAST("driverName" AS TEXT)) NOT IN ('', 'nan', 'None')
+              AND "driverName" IS NOT NULL
+              AND LOWER(TRIM(CAST("driverName" AS TEXT))) NOT IN (
+                    '', 'nan', 'none', 'null', 'n/a', 'na',
+                    'system generated', 'systemgenerated', 'auto-gen', 'autogen', 'auto gen'
+              )
+              AND TRIM(CAST("driverName" AS TEXT)) !~ '^[-._[:space:]]+$'
+              AND TRIM(CAST("driverName" AS TEXT)) !~ '^[0-9]+$'
             ORDER BY driver_name ASC
         ''', (clean_plate,))
         rows = cursor.fetchall()
@@ -627,36 +641,68 @@ async def save_truck_image(
 @app.get("/api/truck-scale-history")
 async def get_truck_scale_history(
     license_plate: str = Query(""),
+    date: str = Query(""),
+    status: str = Query(""),
     current_user: dict = Depends(get_current_user)
 ):
     try:
         clean_plate = license_plate.strip().replace(" ", "")
+        clean_date = date.strip()
+        clean_status = status.strip()
 
         conn = get_db_connection()
         cursor = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-        # เฉพาะรอบคืนพาเลท: ชั่งเข้าแล้วยังไม่ชั่งออก = รถยังอยู่ในโรงงาน
         sql = '''
             SELECT
                 truck."weightInTicketCode" as document_ref,
                 truck."carRegister" as license_plate,
                 truck."weightInTime" as weight_in_time,
                 truck."weightIn" as weight_in,
-                timg.image_base64 as truck_image_base64
+                truck."weightOutTime" as weight_out_time,
+                truck."weightOut" as weight_out,
+                timg.id as image_id
             FROM truck_weighing truck
             LEFT JOIN (
-                SELECT DISTINCT ON (truck_weighing_key) truck_weighing_key, image_base64
+                SELECT DISTINCT ON (truck_weighing_key) truck_weighing_key, id
                 FROM truck_scale_images
                 WHERE truck_weighing_key IS NOT NULL
                 ORDER BY truck_weighing_key, id DESC
             ) timg ON TRIM(SPLIT_PART(CAST(truck."row_key" AS TEXT), '.', 1)) = timg.truck_weighing_key
-            WHERE ("weightOut" IS NULL OR CAST("weightOut" AS TEXT) IN ('', '0')
-                   OR "weightOutTime" IS NULL OR CAST("weightOutTime" AS TEXT) IN ('', '-'))
         '''
+        # เงื่อนไขสถานะ ต้องตรงกับตอนคำนวณ status ด้านล่าง เพื่อให้ตัวกรองกับ badge ตรงกันเสมอ
+        has_weight_out = 'truck."weightOut" IS NOT NULL AND truck."weightOut" > 0'
+        status_condition = {
+            "return": f'({has_weight_out} AND truck."weightIn" > truck."weightOut")',
+            "pending": f'NOT ({has_weight_out})',
+            "pickup": f'({has_weight_out} AND truck."weightIn" <= truck."weightOut")',
+        }
+
+        # ตัดแถวที่ระบบตาชั่งสร้างขึ้นเอง ไม่ใช่รถจริง: ทะเบียน AUTO-GEN และแถวที่ไม่มีน้ำหนักชั่งเข้า
+        conditions = [
+            'TRIM(CAST(truck."carRegister" AS TEXT)) <> \'AUTO-GEN\'',
+            'truck."weightIn" IS NOT NULL AND truck."weightIn" > 0',
+        ]
         params = []
+
+        # เลือกสถานะมา = กรองตามสถานะนั้นตรงๆ
+        # ไม่ได้กรองอะไรเลย = โชว์เฉพาะรายการคืนพาเลท (ชั่งออกแล้วน้ำหนักลดลง หรือถ่ายรูปในระบบแล้วแต่ยังไม่ชั่งออก)
+        # ค้นหาทะเบียน/วันที่ = โชว์ทุกเที่ยวของรถคันนั้น เพื่อให้ตรวจสอบย้อนหลังได้ครบ
+        if clean_status in status_condition:
+            conditions.append(status_condition[clean_status])
+        elif not (clean_plate or clean_date):
+            conditions.append(
+                f'({status_condition["return"]} OR timg.truck_weighing_key IS NOT NULL)'
+            )
+
         if clean_plate:
-            sql += ' AND REPLACE(CAST(truck."carRegister" AS TEXT), \' \', \'\') = %s'
+            conditions.append('REPLACE(CAST(truck."carRegister" AS TEXT), \' \', \'\') = %s')
             params.append(clean_plate)
+        if clean_date:
+            conditions.append('CAST(truck."weightInTime" AS DATE) = %s')
+            params.append(clean_date)
+
+        sql += ' WHERE ' + ' AND '.join(conditions)
         sql += ' ORDER BY truck."weightInTime" DESC LIMIT 100'
 
         cursor.execute(sql, tuple(params))
@@ -665,19 +711,69 @@ async def get_truck_scale_history(
 
         records = []
         for row in rows:
+            weight_in = float(row["weight_in"]) if row["weight_in"] is not None else 0
+            has_weight_out = row["weight_out"] is not None and float(row["weight_out"]) > 0
+            weight_out = float(row["weight_out"]) if has_weight_out else 0
+
+            if not has_weight_out:
+                status = "pending"      # ถ่ายรูปแล้ว รถยังอยู่ในโรงงาน รอชั่งออก
+            elif weight_in > weight_out:
+                status = "return"       # ออกเบากว่าเข้า = คืนพาเลท
+            else:
+                status = "pickup"       # ออกหนักกว่าเข้า = มารับของ ไม่ใช่คืนพาเลท
+
             records.append({
                 "documentRef": row["document_ref"] or "-",
                 "licensePlate": row["license_plate"] or "-",
                 "weightInTime": str(row["weight_in_time"]) if row["weight_in_time"] else "-",
-                "weightIn": float(row["weight_in"]) if row["weight_in"] is not None else 0,
-                "weightOutTime": "รอรถออก",
-                "weightOut": "รอรถออก",
-                "netWeight": "รอรถออก",
-                "truckImageBase64": row["truck_image_base64"] or None
+                "weightIn": weight_in,
+                "weightOutTime": str(row["weight_out_time"]) if has_weight_out and row["weight_out_time"] else "รอรถออก",
+                "weightOut": weight_out if has_weight_out else "รอรถออก",
+                # ใช้ค่าสัมบูรณ์ ให้ badge สถานะเป็นตัวบอกความหมายแทนเครื่องหมายลบ
+                "netWeight": abs(weight_in - weight_out) if has_weight_out else "รอรถออก",
+                "status": status,
+                # ส่งแค่ id ไม่ส่ง base64 มาทั้งก้อน ไม่งั้น 100 แถวจะหนักหลาย MB
+                "imageId": row["image_id"]
             })
         return {"success": True, "data": records}
     except Exception as e:
         print(f"❌ API Truck Scale History Error: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/receipt-image/{record_id}")
+async def get_receipt_image(
+    record_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT image_base64 FROM receipt_data WHERE id = %s', (record_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row or not row[0]:
+            return {"success": False, "message": "ไม่พบรูปภาพ"}
+        return {"success": True, "image_base64": row[0]}
+    except Exception as e:
+        print(f"❌ API Receipt Image Error: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.get("/api/truck-scale-image/{image_id}")
+async def get_truck_scale_image(
+    image_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT image_base64 FROM truck_scale_images WHERE id = %s', (image_id,))
+        row = cursor.fetchone()
+        conn.close()
+        if not row:
+            return {"success": False, "message": "ไม่พบรูปภาพ"}
+        return {"success": True, "image_base64": row[0]}
+    except Exception as e:
+        print(f"❌ API Truck Scale Image Error: {e}")
         return {"success": False, "message": str(e)}
 
 @app.get("/api/records")
@@ -692,17 +788,33 @@ async def get_records(
         
         cursor.execute("""
             SELECT * FROM (
-                SELECT DISTINCT ON (r.document_no) 
-                       r.*, 
-                       truck."carRegister" as license_plate, 
-                       truck."weightInTime" as weight_in_time, 
-                       truck."weightIn" as weight_in, 
-                       truck."weightOutTime" as weight_out_time, 
+                SELECT DISTINCT ON (r.document_no)
+                       r.id, r.document_no, r.date, r.customer_name, r.customer_code,
+                       r.expected_qty, r.actual_qty, r.checker_name, r.pallet_details,
+                       r.plant_ticketcode, r.calculated_weight,
+                       -- ไม่ดึง r.image_base64 มาทั้งก้อน ส่งแค่ว่ามีรูปไหม แล้วค่อยโหลดตอนกดดู
+                       (r.image_base64 IS NOT NULL AND r.image_base64 <> '') as has_image,
+                       truck."carRegister" as license_plate,
+                       truck."weightInTime" as weight_in_time,
+                       truck."weightIn" as weight_in,
+                       truck."weightOutTime" as weight_out_time,
                        truck."weightOut" as weight_out,
-                       timg.image_base64 as truck_image_base64,
+                       plant.plant_name as plant_name,
                        COALESCE(CAST(NULLIF(CAST(truck."weightIn" AS TEXT), '') AS NUMERIC), 0) - COALESCE(CAST(NULLIF(CAST(truck."weightOut" AS TEXT), '') AS NUMERIC), 0) as pallet_weight
                 FROM receipt_data r
-                
+
+                -- แปลงรหัสที่ได้จาก OCR เป็นชื่อโรงงานจริง โดยเทียบ 2 ตัวแรกกับ autoWeightTicketPrefix
+                -- ใช้ DISTINCT ON เพราะ master_plant มี prefix ซ้ำ (เช่น SK) ถ้า join ตรงๆ แถวจะบานปลาย
+                LEFT JOIN (
+                    SELECT DISTINCT ON (UPPER(TRIM("autoWeightTicketPrefix")))
+                           UPPER(TRIM("autoWeightTicketPrefix")) as prefix,
+                           "name" as plant_name
+                    FROM master_plant
+                    WHERE "autoWeightTicketPrefix" IS NOT NULL
+                      AND TRIM("autoWeightTicketPrefix") <> ''
+                    ORDER BY UPPER(TRIM("autoWeightTicketPrefix")), "row_key"
+                ) plant ON plant.prefix = UPPER(LEFT(TRIM(CAST(r.plant_ticketcode AS TEXT)), 2))
+
                 LEFT JOIN (
                     SELECT 
                         REPLACE(TRIM(CAST("receiptNumber" AS TEXT)), ' ', '') as clean_receipt_no, 
@@ -717,14 +829,7 @@ async def get_records(
                        ON delivery.truck_key IS NOT NULL 
                       AND TRIM(SPLIT_PART(delivery.truck_key, '.', 1)) = TRIM(SPLIT_PART(CAST(truck."row_key" AS TEXT), '.', 1))
                       AND LOWER(CAST(truck."row_key" AS TEXT)) NOT IN ('', 'nan', 'none', 'null')
-                
-                LEFT JOIN (
-                    SELECT DISTINCT ON (truck_weighing_key) truck_weighing_key, image_base64
-                    FROM truck_scale_images
-                    WHERE truck_weighing_key IS NOT NULL
-                    ORDER BY truck_weighing_key, id DESC
-                ) timg ON TRIM(SPLIT_PART(CAST(truck."row_key" AS TEXT), '.', 1)) = timg.truck_weighing_key
-                
+
                 ORDER BY r.document_no, r.id DESC
             ) AS unique_records
             ORDER BY id DESC
@@ -747,9 +852,12 @@ async def get_records(
                 "actualQty": row["actual_qty"],
                 "checkerName": row["checker_name"],
                 "palletDetails": json.loads(row["pallet_details"]) if row["pallet_details"] else [],
-                "imageBase64": row["image_base64"],
+                # ส่งแค่ธงบอกว่ามีรูป รูปจริงโหลดผ่าน /api/receipt-image/{id} ตอนกดดู
+                "hasImage": row["has_image"],
                 # [จุดที่ 5] ส่งค่า plant_ticketcode คืนให้ Frontend แทนของเดิม
-                "plant_ticketcode": row["plant_ticketcode"], 
+                "plant_ticketcode": row["plant_ticketcode"],
+                # ชื่อโรงงานจริงที่แปลงมาจาก prefix 2 ตัวแรกของรหัส ถ้าเทียบไม่เจอค่อยโชว์รหัสดิบแทน
+                "plant_name": row["plant_name"] or row["plant_ticketcode"] or "-",
                 "calculated_weight": row["calculated_weight"] or 0,
                 "truckDetail": {
                     "license_plate": row["license_plate"] or "-",
@@ -757,8 +865,7 @@ async def get_records(
                     "weight_in": row["weight_in"] or 0,
                     "weight_out_time": row["weight_out_time"] or "รอรถออก",
                     "weight_out": row["weight_out"] or 0,
-                    "pallet_weight": row["pallet_weight"] or 0,
-                    "truck_image_base64": row["truck_image_base64"] or None
+                    "pallet_weight": row["pallet_weight"] or 0
                 }
             })
         return {"success": True, "data": records, "total": total_count}
