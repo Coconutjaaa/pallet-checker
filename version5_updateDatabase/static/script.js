@@ -37,7 +37,7 @@ async function fetchWithAuth(url, options = {}) {
 let palletCount = 0, ocrExpectedQty = 0, totalActualPiecesGlobal = 0;
 let isOcrScanned = false, currentUser = "";
 let currentDocNumber = "", currentImageBase64 = "", currentCropImageBase64 = "";
-let currentPlantTicketcode = ""; 
+let currentPlantTicketcode = "", currentLicensePlate = ""; 
 
 let audioCtx;
 let editingRecordId = null; 
@@ -71,6 +71,107 @@ document.addEventListener('click', function(event) {
         }
     }
 });
+
+// กฎรหัสผ่าน ใช้ชุดเดียวกันทั้งตอนโชว์ติ๊กและตอนตรวจก่อนส่ง จะได้ไม่มีทางหลุดไม่ตรงกัน
+const PASSWORD_RULES = {
+    length: (pwd) => pwd.length >= 8,
+    letter: (pwd) => /[a-zA-Z]/.test(pwd),
+    number: (pwd) => /\d/.test(pwd),
+    special: (pwd) => /[^a-zA-Z0-9]/.test(pwd)
+};
+
+// รหัสผ่านที่ถูกเดาเป็นอันดับต้นๆ ต่อให้หน้าตาผ่านกฎก็ถือว่าอ่อนมาก
+const PASSWORD_COMMON = [
+    'password', 'passw0rd', '12345678', '123456789', '1234567890', 'qwerty', 'qwertyui',
+    'abc123', 'admin', 'admin123', 'welcome', 'iloveyou', 'letmein', 'monkey', 'dragon',
+    'sunshine', 'princess', 'football', 'baseball', 'trustno1', 'p@ssw0rd', 'scg1234'
+];
+
+const STRENGTH_LEVELS = [
+    { max: 28,       label: 'อ่อนมาก',   color: 'text-red-600',    bar: 'bg-red-500',    pct: 20 },
+    { max: 36,       label: 'อ่อน',      color: 'text-orange-600', bar: 'bg-orange-500', pct: 40 },
+    { max: 60,       label: 'พอใช้',     color: 'text-amber-600',  bar: 'bg-amber-500',  pct: 60 },
+    { max: 128,      label: 'แข็งแรง',   color: 'text-green-600',  bar: 'bg-green-500',  pct: 85 },
+    { max: Infinity, label: 'แข็งแรงมาก', color: 'text-green-700',  bar: 'bg-green-600',  pct: 100 }
+];
+
+// ประเมินด้วย entropy = ความยาวที่ใช้ได้จริง x log2(ขนาดชุดอักขระ)
+// แล้วหักลบรูปแบบที่เดาง่าย (ตัวซ้ำ, เรียงต่อกัน, ข้อมูลส่วนตัว) ตามแนวทาง NIST/zxcvbn
+function estimatePasswordBits(pwd, personalInfo) {
+    if (!pwd) return 0;
+
+    let pool = 0;
+    if (/[a-z]/.test(pwd)) pool += 26;
+    if (/[A-Z]/.test(pwd)) pool += 26;
+    if (/\d/.test(pwd)) pool += 10;
+    if (/[^a-zA-Z0-9]/.test(pwd)) pool += 33;
+    if (/[^\x00-\x7F]/.test(pwd)) pool += 80;   // อักษรไทยและอักขระนอก ASCII
+    if (pool === 0) return 0;
+
+    // ตัวที่ซ้ำตัวก่อนหน้า หรือเรียงต่อกัน (abc / 321) แทบไม่เพิ่มความยากในการเดา
+    let effectiveLength = 1;
+    for (let i = 1; i < pwd.length; i++) {
+        const gap = pwd.charCodeAt(i) - pwd.charCodeAt(i - 1);
+        if (gap === 0) effectiveLength += 0.2;
+        else if (gap === 1 || gap === -1) effectiveLength += 0.3;
+        else effectiveLength += 1;
+    }
+
+    let bits = effectiveLength * Math.log2(pool);
+
+    const lower = pwd.toLowerCase();
+    if (PASSWORD_COMMON.some(common => lower === common)) return Math.min(bits, 12);
+    if (PASSWORD_COMMON.some(common => lower.includes(common))) bits *= 0.5;
+
+    // รหัสที่มีชื่อหรือรหัสพนักงานตัวเองอยู่ ถือว่าเดาง่ายมากสำหรับคนใกล้ตัว
+    for (const info of personalInfo) {
+        if (info.length >= 3 && lower.includes(info.toLowerCase())) {
+            bits *= 0.4;
+            break;
+        }
+    }
+
+    return bits;
+}
+
+function updatePasswordRules() {
+    const input = document.getElementById('regPassword');
+    if (!input) return;
+    const pwd = input.value;
+
+    document.querySelectorAll('#passwordRules li').forEach(li => {
+        const passed = PASSWORD_RULES[li.dataset.rule](pwd);
+        const icon = li.querySelector('i');
+
+        li.classList.toggle('text-green-600', passed);
+        li.classList.toggle('text-gray-400', !passed);
+        icon.className = passed ? 'fa-solid fa-check' : 'fa-solid fa-xmark';
+    });
+
+    const personalInfo = ['regUserId', 'regFirstName', 'regLastName']
+        .map(id => (document.getElementById(id) || {}).value || '')
+        .filter(Boolean);
+
+    const bits = estimatePasswordBits(pwd, personalInfo);
+    const level = STRENGTH_LEVELS.find(l => bits < l.max);
+
+    const labelEl = document.getElementById('passwordStrengthLabel');
+    const barEl = document.getElementById('passwordStrengthBar');
+    if (!labelEl || !barEl) return;
+
+    if (!pwd) {
+        labelEl.textContent = '-';
+        labelEl.className = 'font-bold text-gray-400';
+        barEl.className = 'h-full rounded-full transition-all duration-300 bg-gray-300';
+        barEl.style.width = '0%';
+        return;
+    }
+
+    labelEl.textContent = `${level.label} (${Math.round(bits)} bits)`;
+    labelEl.className = `font-bold ${level.color}`;
+    barEl.className = `h-full rounded-full transition-all duration-300 ${level.bar}`;
+    barEl.style.width = `${level.pct}%`;
+}
 
 function togglePassword(inputId, iconId) {
     const pwd = document.getElementById(inputId);
@@ -201,7 +302,9 @@ async function loadUsersData(apiUrl, viewType) {
 // ไปแก้ไขในฟังก์ชัน switchAdminTab(tabName) ตรงบรรทัดที่เกี่ยวกับ 'users' ให้เรียก refreshUserTable()
 
 async function suspendUser(userId) {
-    if(!confirm("ยืนยันการระงับสิทธิ์ผู้ใช้งานนี้ใช่หรือไม่?")) return;
+    const ok = await showCustomConfirm('warning', 'ระงับสิทธิ์ผู้ใช้งาน',
+        'ผู้ใช้งานรายนี้จะเข้าสู่ระบบไม่ได้อีกจนกว่าจะได้รับอนุมัติใหม่', 'ระงับสิทธิ์');
+    if (!ok) return;
     
     try {
         const response = await fetchWithAuth(`/auth/users/suspend/${userId}`, { method: 'PUT' });
@@ -218,7 +321,9 @@ async function suspendUser(userId) {
 }
 
 async function rejectUser(userId) {
-    if(!confirm("คุณต้องการปฏิเสธคำขอและลบผู้ใช้นี้ออกจากระบบใช่หรือไม่?")) return;
+    const ok = await showCustomConfirm('warning', 'ปฏิเสธคำขอสมัคร',
+        'ระบบจะลบผู้ใช้รายนี้ออกจากระบบถาวร และกู้คืนไม่ได้', 'ปฏิเสธและลบ');
+    if (!ok) return;
     
     try {
         const response = await fetchWithAuth(`/auth/users/${userId}`, { method: 'DELETE' });
@@ -252,9 +357,29 @@ async function handleRegister() {
         return;
     }
 
-    const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[^a-zA-Z0-9]).{8,}$/;
-    if (!passwordRegex.test(password)) {
-        showCustomAlert('warning', 'รหัสผ่านไม่ปลอดภัย', 'รหัสผ่านต้องยาว 8 ตัวอักษรขึ้นไป และต้องประกอบด้วยภาษาอังกฤษ ตัวเลข และอักขระพิเศษรวมอยู่ด้วยครับ');
+    const failedRules = Object.entries(PASSWORD_RULES).filter(([, test]) => !test(password));
+    if (failedRules.length > 0) {
+        showCustomAlert('warning', 'รหัสผ่านไม่ปลอดภัย', 'รหัสผ่านยังไม่ครบตามเงื่อนไข กรุณาดูรายการที่ยังไม่ติ๊กเขียวใต้ช่องรหัสผ่านครับ');
+        updatePasswordRules();
+        return;
+    }
+
+    // กฎชุดเดียวกับที่ฝั่งเซิร์ฟเวอร์ตรวจซ้ำใน validate_password() ของ auth.py
+    // เช็คตรงนี้ด้วยเพื่อให้ผู้ใช้รู้ผลทันทีโดยไม่ต้องรอยิงไปแล้วโดนปฏิเสธกลับมา
+    const lowerPwd = password.toLowerCase();
+    const weakWord = PASSWORD_COMMON.find(c => lowerPwd === c || (c.length >= 5 && lowerPwd.includes(c)));
+    if (weakWord) {
+        showCustomAlert('warning', 'รหัสผ่านเดาง่ายเกินไป', `รหัสผ่านมีคำว่า "${weakWord}" ซึ่งเป็นคำที่ถูกเดาเป็นอันดับต้นๆ กรุณาเปลี่ยนใหม่`);
+        return;
+    }
+    const ownInfo = [userId, firstName, lastName].find(info => info.length >= 3 && lowerPwd.includes(info.toLowerCase()));
+    if (ownInfo) {
+        showCustomAlert('warning', 'รหัสผ่านเดาง่ายเกินไป', `ห้ามใช้รหัสพนักงานหรือชื่อของตัวเอง ("${ownInfo}") เป็นส่วนหนึ่งของรหัสผ่าน`);
+        return;
+    }
+    // bcrypt อ่านได้สูงสุด 72 ไบต์ ส่วนที่เกินจะถูกตัดทิ้งเงียบๆ (ภาษาไทย 1 ตัว = 3 ไบต์)
+    if (new TextEncoder().encode(password).length > 72) {
+        showCustomAlert('warning', 'รหัสผ่านยาวเกินไป', 'ระบบเข้ารหัสได้สูงสุด 72 ไบต์ (ภาษาอังกฤษ 72 ตัว หรือภาษาไทย 24 ตัว) กรุณาใช้รหัสผ่านที่สั้นลง');
         return;
     }
 
@@ -286,6 +411,7 @@ async function handleRegister() {
             document.getElementById('regConfirmPassword').value = '';
             document.getElementById('regFirstName').value = '';
             document.getElementById('regLastName').value = '';
+            updatePasswordRules();
             toggleAuthMode();
         } else {
             showCustomAlert('warning', 'ไม่สามารถสมัครได้', data.detail || 'เกิดข้อผิดพลาดบางอย่าง');
@@ -664,7 +790,7 @@ function detectDocumentCorners(imageElement, canvasWidth, canvasHeight) {
                 y: bestApprox.data32S[i * 2 + 1] * scaleY
             });
         }
-        detectedPoints = sortCorners(detectedPoints);
+        detectedPoints = orderQuadPoints(detectedPoints);
     }
 
     src.delete(); resized.delete(); gray.delete(); blurred.delete(); 
@@ -674,13 +800,26 @@ function detectDocumentCorners(imageElement, canvasWidth, canvasHeight) {
     return detectedPoints;
 }
 
-function sortCorners(pts) {
-    pts.sort((a, b) => a.y - b.y);
-    let top = pts.slice(0, 2);
-    let bottom = pts.slice(2, 4);
-    top.sort((a, b) => a.x - b.x);
-    bottom.sort((a, b) => b.x - a.x);
-    return [top[0], top[1], bottom[0], bottom[1]];
+// เรียง 4 จุดใหม่จากตำแหน่งจริงบนภาพ ให้ได้ลำดับ บนซ้าย → บนขวา → ล่างขวา → ล่างซ้าย
+// ไม่ยึดว่าจุดไหนถูกสร้างมาเป็นมุมอะไรตั้งแต่แรก เพราะผู้ใช้ลากสลับตำแหน่งกันได้อิสระ
+// ต้องให้ผลตรงกับ order_quad_points() ใน main.py ที่เป็นคนดัดภาพจริง
+function orderQuadPoints(pts) {
+    const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+    const cy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+
+    // เรียงตามมุมรอบจุดศูนย์กลาง จะได้สี่เหลี่ยมที่เส้นไม่ตัดกันเสมอ ไม่ว่าผู้ใช้จะลากยังไง
+    // แกน y ของ canvas ชี้ลง มุมที่เพิ่มขึ้นจึงไล่ตามเข็มนาฬิกา: ขวา → ล่าง → ซ้าย → บน
+    const sorted = [...pts].sort(
+        (a, b) => Math.atan2(a.y - cy, a.x - cx) - Math.atan2(b.y - cy, b.x - cx)
+    );
+
+    // หมุนลำดับให้เริ่มที่จุดที่ใกล้มุมบนซ้ายที่สุด
+    let start = 0;
+    for (let i = 1; i < sorted.length; i++) {
+        if (sorted[i].x + sorted[i].y < sorted[start].x + sorted[start].y) start = i;
+    }
+
+    return [...sorted.slice(start), ...sorted.slice(0, start)];
 }
 
 function openCropModal() {
@@ -740,10 +879,15 @@ function drawCanvas() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(cropImgElement, 0, 0, canvas.width, canvas.height);
 
+    // วาดกรอบตามลำดับที่เรียงจากตำแหน่งจริง ไม่ใช่ลำดับใน canvasPts
+    // เพื่อให้เส้นไม่ไขว้เป็นโบว์ตอนผู้ใช้ลากจุดข้ามฝั่งกัน ส่วน canvasPts ต้องคงลำดับเดิมไว้
+    // ไม่งั้นจุดที่กำลังลากอยู่จะสลับ index กลางคัน แล้วนิ้วจะหลุดจากจุดที่จับ
+    const outline = orderQuadPoints(canvasPts);
+
     ctx.beginPath();
-    ctx.moveTo(canvasPts[0].x, canvasPts[0].y);
+    ctx.moveTo(outline[0].x, outline[0].y);
     for(let i=1; i<4; i++) {
-        ctx.lineTo(canvasPts[i].x, canvasPts[i].y);
+        ctx.lineTo(outline[i].x, outline[i].y);
     }
     ctx.closePath();
     ctx.fillStyle = "rgba(59, 130, 246, 0.2)"; 
@@ -807,11 +951,23 @@ async function confirmCropAndProcess() {
     closeCropModal();
     const btn = document.getElementById('btnScanOCR');
     const originalContent = btn.innerHTML;
-    btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin mr-2"></i> กำลังส่งเข้า Gemini AI...';
+    // ไม่ระบุชื่อผู้ให้บริการแล้ว เพราะระบบสลับไปใช้ชั้นสำรองได้เองเมื่อชั้นแรกล่ม
+    // นับวินาทีให้เห็นด้วย เพราะงานวิจัยเรื่องเวลารอชี้ว่าคนรอได้นานขึ้นเกือบเท่าตัวถ้ารู้ว่า
+    // ระบบยังทำงานอยู่และเหลืออีกเท่าไหร่ ถ้าเห็นแค่วงกลมหมุนเฉยๆ จะเริ่มคิดว่าเครื่องค้าง
+    const scanStartedAt = Date.now();
+    const renderScanProgress = () => {
+        const sec = Math.floor((Date.now() - scanStartedAt) / 1000);
+        // ปกติชั้นแรกตอบใน ~5 วินาที ถ้าเกินนั้นแปลว่ากำลังไล่ชั้นสำรอง บอกให้รู้จะได้ไม่เดา
+        const label = sec >= 8 ? `กำลังลองตัวสำรอง... ${sec} วิ` : `กำลังอ่านข้อมูลจากรูป... ${sec} วิ`;
+        btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin mr-2"></i> ${label}`;
+    };
+    renderScanProgress();
+    const scanProgressTimer = setInterval(renderScanProgress, 1000);
     btn.classList.add('opacity-75', 'cursor-not-allowed');
     btn.disabled = true;
 
-    const realPts = canvasPts.map(p => ({
+    // ส่งไปตามกรอบที่ผู้ใช้วาดจริง โดยเรียงมุมจากตำแหน่งบนภาพ ไม่ใช่ลำดับที่จุดถูกสร้างมา
+    const realPts = orderQuadPoints(canvasPts).map(p => ({
         x: p.x / scaleRatio,
         y: p.y / scaleRatio
     }));
@@ -825,109 +981,11 @@ async function confirmCropAndProcess() {
         const result = await response.json();
 
         if (result.success) {
-            isOcrScanned = true;
-            const data = result.data;
-            currentOcrFullData = data;
-            
-            currentDocNumber = data.document_no || "UNKNOWN-DOC";
-            currentPlantTicketcode = data.plant_ticketcode || ""; 
-            ocrExpectedQty = (data.pallets_returned && data.pallets_returned.quantity_actual) ? parseInt(data.pallets_returned.quantity_actual) || 0 : 0;
-
-            document.getElementById('ocrBeforeScan').classList.add('hidden');
-            document.getElementById('ocrAfterScan').classList.remove('hidden');
-            document.getElementById('ocrStatusBadge').classList.remove('hidden');
-            
-            if (result.images) {
-                currentImageBase64 = result.images.full || "";
-                currentCropImageBase64 = result.images.crop || "";
-                
-                document.getElementById('previewImage').src = currentImageBase64;
-                
-                if (currentCropImageBase64) {
-                    document.getElementById('cropImageContainer').classList.remove('hidden');
-                    document.getElementById('previewCropImage').src = currentCropImageBase64;
-                }
-            } else {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    currentImageBase64 = e.target.result;
-                    document.getElementById('previewImage').src = currentImageBase64;
-                };
-                reader.readAsDataURL(selectedFileForCrop);
-            }
-
-            document.getElementById('docNumberText').innerHTML = currentDocNumber + (currentPlantTicketcode ? ` <span class="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">โรงงาน: ${currentPlantTicketcode}</span>` : '');
-            document.getElementById('expectedTotal').innerText = ocrExpectedQty;
-            if (currentPlantTicketcode) {
-                try {
-                    const res = await fetchWithAuth(`/api/pallets/${encodeURIComponent(currentPlantTicketcode)}`);
-                    const palletData = await res.json();
-                    if (palletData.success && palletData.pallets.length > 0) {
-                        allPallets = palletData.pallets;
-                    } else {
-                        allPallets = [];
-                        console.warn("ไม่พบพาเลทที่ผูกกับโรงงานนี้ใน Master Data");
-                    }
-                } catch(e) {
-                    if (e.message !== "Unauthorized") console.error("ดึงข้อมูลพาเลทไม่สำเร็จ:", e);
-                }
-            } else {
-                allPallets = [];
-            }
-            
-            const trigger = document.getElementById('customSelectTrigger');
-            trigger.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
-            trigger.classList.add('bg-white', 'text-gray-800', 'cursor-pointer', 'hover:bg-gray-50');
-            document.getElementById('customSelectText').innerText = "-- ค้นหาและเลือกประเภทพาเลท --";
-            
-            const btnAdd = document.getElementById('btnAdd');
-            btnAdd.disabled = false;
-            btnAdd.className = "bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center transition-all active:scale-95 shadow-sm";
-
-            document.getElementById('palletList').innerHTML = PALLET_EMPTY_STATE_HTML;
-            document.getElementById('emptyState').style.display = 'none';
-            palletCount = 0;
-
-            let mfg = (data.pallets_returned && data.pallets_returned.manufacturer) ? data.pallets_returned.manufacturer : "";
-            let code = (data.pallets_returned && data.pallets_returned.code) ? data.pallets_returned.code : "";
-
-            if (mfg || code) {
-                // ต้องใช้ "name - code" เต็มๆ ตามที่อ้างอิงในตาราง master_pallet ห้ามย่อ/ตัดคำ
-                // ไม่งั้นตอนบันทึกจะจับคู่คำนวณน้ำหนักไม่เจอ (main.py เทียบแบบ exact match)
-                let matchedPallet = null;
-                if (code) {
-                    matchedPallet = allPallets.find(p => {
-                        const parts = p.split(' - ');
-                        const palletCode = parts[parts.length - 1].trim();
-                        return palletCode.toUpperCase() === code.trim().toUpperCase();
-                    });
-                }
-                let defaultPalletName = matchedPallet || (mfg && code ? `${mfg} - ${code}` : (mfg || code || "พาเลททั่วไป"));
-                let defaultQty = ocrExpectedQty > 0 ? ocrExpectedQty : 1;
-                palletCount = 1;
-                document.getElementById('totalItems').innerText = `${palletCount} รายการ`;
-                
-                const itemId = `pallet-item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-                const html = `
-                    <div id="${itemId}" data-name="${defaultPalletName}" class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-green-50 animate-fade-in border-l-4 border-green-500">
-                        <div class="flex-1">
-                            <span class="text-xs font-bold text-green-600 mb-1 block"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> ดึงข้อมูลอัตโนมัติจากใบนำส่ง</span>
-                            <h3 class="font-bold text-lg text-blue-800 pallet-name">${defaultPalletName}</h3>
-                        </div>
-                        <div class="flex items-center gap-3">
-                            <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden h-12 bg-white shadow-sm">
-                                <button onclick="updateQty('${itemId}', -1)" class="px-4 py-2 bg-gray-100 font-bold border-r h-full active:bg-gray-300"><i class="fa-solid fa-minus"></i></button>
-                                <input type="number" id="qty-${itemId}" value="${defaultQty}" min="0" class="qty-input w-20 text-center font-bold text-xl h-full outline-none text-green-700">
-                                <button onclick="updateQty('${itemId}', 1)" class="px-4 py-2 bg-gray-100 font-bold border-l h-full active:bg-gray-300"><i class="fa-solid fa-plus"></i></button>
-                            </div>
-                            <button onclick="removeItem('${itemId}')" class="text-red-500 hover:text-red-700 p-3 bg-white border border-red-100 rounded-lg shadow-sm"><i class="fa-solid fa-trash-can text-xl"></i></button>
-                        </div>
-                    </div>`;
-                document.getElementById('palletList').insertAdjacentHTML('beforeend', html);
-            } else {
-                document.getElementById('emptyState').style.display = 'block';
-                document.getElementById('totalItems').innerText = `0 รายการ`;
-            }
+            await applyScanData(result.data, result.images);
+        } else if (result.allow_manual) {
+            // อ่านรูปไม่สำเร็จทุกชั้นแล้ว แต่ยังทำงานต่อได้ด้วยการกรอกเอง ไม่ต้องเริ่มใหม่ทั้งหมด
+            pendingManualImages = result.images || {};
+            openManualEntry();
         } else {
             showCustomAlert('warning', 'OCR ไม่สำเร็จ', result.message);
             executeRetakeImage();
@@ -938,10 +996,165 @@ async function confirmCropAndProcess() {
         showCustomAlert('warning', 'ผิดพลาด', 'เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ');
         executeRetakeImage();
     } finally {
+        clearInterval(scanProgressTimer);
         btn.disabled = false;
         btn.classList.remove('opacity-75', 'cursor-not-allowed');
         btn.innerHTML = originalContent;
     }
+}
+
+// นำข้อมูลใบนำส่งมาเปิดใช้งานหน้าจอ ใช้ร่วมกันทั้งกรณีอ่านจากรูปสำเร็จ และกรณีผู้ใช้กรอกเอง
+// แยกออกมาเป็นฟังก์ชันเดียว เพื่อไม่ให้สองทางเดินหลุดไม่ตรงกันเวลาแก้ทีหลัง
+async function applyScanData(data, images) {
+    isOcrScanned = true;
+    currentOcrFullData = data;
+    
+    currentDocNumber = data.document_no || "UNKNOWN-DOC";
+    currentPlantTicketcode = data.plant_ticketcode || "";
+    currentLicensePlate = data.license_plate || ""; 
+    ocrExpectedQty = (data.pallets_returned && data.pallets_returned.quantity_actual) ? parseInt(data.pallets_returned.quantity_actual) || 0 : 0;
+
+    document.getElementById('ocrBeforeScan').classList.add('hidden');
+    document.getElementById('ocrAfterScan').classList.remove('hidden');
+    document.getElementById('ocrStatusBadge').classList.remove('hidden');
+    
+    if (images && images.full) {
+        currentImageBase64 = images.full || "";
+        currentCropImageBase64 = images.crop || "";
+        
+        document.getElementById('previewImage').src = currentImageBase64;
+        
+        if (currentCropImageBase64) {
+            document.getElementById('cropImageContainer').classList.remove('hidden');
+            document.getElementById('previewCropImage').src = currentCropImageBase64;
+        }
+    } else {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            currentImageBase64 = e.target.result;
+            document.getElementById('previewImage').src = currentImageBase64;
+        };
+        reader.readAsDataURL(selectedFileForCrop);
+    }
+
+    document.getElementById('docNumberText').innerHTML = currentDocNumber + (currentPlantTicketcode ? ` <span class="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded">เลขที่ตั๋ว: ${currentPlantTicketcode}</span>` : '');
+    document.getElementById('expectedTotal').innerText = ocrExpectedQty;
+    if (currentPlantTicketcode) {
+        try {
+            const res = await fetchWithAuth(`/api/pallets/${encodeURIComponent(currentPlantTicketcode)}`);
+            const palletData = await res.json();
+            if (palletData.success && palletData.pallets.length > 0) {
+                allPallets = palletData.pallets;
+            } else {
+                allPallets = [];
+                console.warn("ไม่พบพาเลทที่ผูกกับโรงงานนี้ใน Master Data");
+            }
+        } catch(e) {
+            if (e.message !== "Unauthorized") console.error("ดึงข้อมูลพาเลทไม่สำเร็จ:", e);
+        }
+    } else {
+        allPallets = [];
+    }
+    
+    const trigger = document.getElementById('customSelectTrigger');
+    trigger.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+    trigger.classList.add('bg-white', 'text-gray-800', 'cursor-pointer', 'hover:bg-gray-50');
+    document.getElementById('customSelectText').innerText = "-- ค้นหาและเลือกประเภทพาเลท --";
+    
+    const btnAdd = document.getElementById('btnAdd');
+    btnAdd.disabled = false;
+    btnAdd.className = "bg-blue-600 hover:bg-blue-700 text-white px-6 py-4 rounded-lg font-bold text-lg flex items-center justify-center transition-all active:scale-95 shadow-sm";
+
+    document.getElementById('palletList').innerHTML = PALLET_EMPTY_STATE_HTML;
+    document.getElementById('emptyState').style.display = 'none';
+    palletCount = 0;
+
+    let mfg = (data.pallets_returned && data.pallets_returned.manufacturer) ? data.pallets_returned.manufacturer : "";
+    let code = (data.pallets_returned && data.pallets_returned.code) ? data.pallets_returned.code : "";
+
+    if (mfg || code) {
+        // ต้องใช้ "name - code" เต็มๆ ตามที่อ้างอิงในตาราง master_pallet ห้ามย่อ/ตัดคำ
+        // ไม่งั้นตอนบันทึกจะจับคู่คำนวณน้ำหนักไม่เจอ (main.py เทียบแบบ exact match)
+        let matchedPallet = null;
+        if (code) {
+            matchedPallet = allPallets.find(p => {
+                const parts = p.split(' - ');
+                const palletCode = parts[parts.length - 1].trim();
+                return palletCode.toUpperCase() === code.trim().toUpperCase();
+            });
+        }
+        let defaultPalletName = matchedPallet || (mfg && code ? `${mfg} - ${code}` : (mfg || code || "พาเลททั่วไป"));
+        let defaultQty = ocrExpectedQty > 0 ? ocrExpectedQty : 1;
+        palletCount = 1;
+        document.getElementById('totalItems').innerText = `${palletCount} รายการ`;
+        
+        const itemId = `pallet-item-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        const html = `
+            <div id="${itemId}" data-name="${defaultPalletName}" class="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-green-50 animate-fade-in border-l-4 border-green-500">
+                <div class="flex-1">
+                    <span class="text-xs font-bold text-green-600 mb-1 block"><i class="fa-solid fa-wand-magic-sparkles mr-1"></i> ดึงข้อมูลอัตโนมัติจากใบนำส่ง</span>
+                    <h3 class="font-bold text-lg text-blue-800 pallet-name">${defaultPalletName}</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center border border-gray-300 rounded-lg overflow-hidden h-12 bg-white shadow-sm">
+                        <button onclick="updateQty('${itemId}', -1)" class="px-4 py-2 bg-gray-100 font-bold border-r h-full active:bg-gray-300"><i class="fa-solid fa-minus"></i></button>
+                        <input type="number" id="qty-${itemId}" value="${defaultQty}" min="0" class="qty-input w-20 text-center font-bold text-xl h-full outline-none text-green-700">
+                        <button onclick="updateQty('${itemId}', 1)" class="px-4 py-2 bg-gray-100 font-bold border-l h-full active:bg-gray-300"><i class="fa-solid fa-plus"></i></button>
+                    </div>
+                    <button onclick="removeItem('${itemId}')" class="text-red-500 hover:text-red-700 p-3 bg-white border border-red-100 rounded-lg shadow-sm"><i class="fa-solid fa-trash-can text-xl"></i></button>
+                </div>
+            </div>`;
+        document.getElementById('palletList').insertAdjacentHTML('beforeend', html);
+    } else {
+        document.getElementById('emptyState').style.display = 'block';
+        document.getElementById('totalItems').innerText = `0 รายการ`;
+    }
+}
+
+// ==========================================
+// โหมดกรอกมือ: ใช้เมื่อระบบอ่านรูปไม่สำเร็จครบทุกชั้น
+// ==========================================
+let pendingManualImages = {};
+
+function openManualEntry() {
+    document.getElementById('manualDocNo').value = '';
+    document.getElementById('manualTicketCode').value = '';
+    document.getElementById('manualExpectedQty').value = '0';
+    document.getElementById('manualLicensePlate').value = '';
+    document.getElementById('manualEntryModal').classList.remove('hidden');
+}
+
+function closeManualEntry() {
+    document.getElementById('manualEntryModal').classList.add('hidden');
+    pendingManualImages = {};
+    executeRetakeImage();
+}
+
+async function confirmManualEntry() {
+    const docNo = document.getElementById('manualDocNo').value.trim();
+    const ticketCode = document.getElementById('manualTicketCode').value.trim();
+    const qty = parseInt(document.getElementById('manualExpectedQty').value) || 0;
+    const plate = document.getElementById('manualLicensePlate').value.trim();
+
+    if (!docNo || !ticketCode) {
+        showCustomAlert('warning', 'กรอกไม่ครบ', 'กรุณากรอกเลขที่เอกสารและเลขที่ตั๋วให้ครบก่อนครับ');
+        return;
+    }
+
+    document.getElementById('manualEntryModal').classList.add('hidden');
+
+    // ประกอบข้อมูลให้มีหน้าตาเหมือนที่ได้จากการอ่านรูป จะได้ใช้เส้นทางเดียวกันต่อได้เลย
+    await applyScanData({
+        document_no: docNo,
+        plant_ticketcode: ticketCode,
+        license_plate: plate,
+        customer: { name: '', code: '' },
+        pallets_returned: { quantity_actual: qty }
+    }, pendingManualImages);
+
+    document.getElementById('ocrStatusBadge').innerText = 'กรอกข้อมูลเอง';
+    document.getElementById('ocrStatusBadge').className = 'text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded font-bold border border-amber-300';
+    pendingManualImages = {};
 }
 
 function retakeImage() {
@@ -966,6 +1179,7 @@ function executeRetakeImage() {
     currentCropImageBase64 = "";
     currentOcrFullData = {};
     currentPlantTicketcode = "";
+    currentLicensePlate = "";
     allPallets = []; 
 
     document.getElementById('cameraInput').value = "";
@@ -1168,7 +1382,8 @@ async function confirmSubmit() {
         checkerName: currentUser,
         palletDetails: pallets,
         imageBase64: currentImageBase64,
-        plant_ticketcode: currentPlantTicketcode
+        plant_ticketcode: currentPlantTicketcode,
+        license_plate: currentLicensePlate
     };
 
     try {
@@ -1201,6 +1416,7 @@ function resetCheckerApp() {
     editingRecordId = null; 
     currentOcrFullData = {};
     currentPlantTicketcode = "";
+    currentLicensePlate = "";
     const editBanner = document.getElementById('editModeBanner');
     if (editBanner) editBanner.classList.add('hidden'); 
 
@@ -1242,7 +1458,13 @@ async function editRecord(recordId) {
         // ถ้าปล่อยว่างไว้ รูปเดิมของรายการนั้นจะหายทันทีที่แก้ไข
         currentImageBase64 = record.hasImage ? await fetchReceiptImage(recordId) : null;
         currentCropImageBase64 = "";
-        currentPlantTicketcode = record.plant_ticketcode || ""; 
+        currentPlantTicketcode = record.plant_ticketcode || "";
+        currentLicensePlate = record.truckDetail ? (record.truckDetail.license_plate || "") : "";
+        if (currentLicensePlate === "-") currentLicensePlate = "";
+        // ตอนบันทึกจะอ่านชื่อลูกค้าจาก currentOcrFullData ถ้าไม่เติมกลับไว้ ข้อมูลลูกค้าจะกลายเป็น "ไม่ระบุชื่อ"
+        currentOcrFullData = {
+            customer: { name: record.customer_name, code: record.customer_code }
+        };
         
         document.getElementById('ocrBeforeScan').classList.add('hidden');
         document.getElementById('ocrAfterScan').classList.remove('hidden');
@@ -1252,7 +1474,7 @@ async function editRecord(recordId) {
         
         let displayDocText = currentDocNumber;
         if (currentPlantTicketcode) {
-            displayDocText += ` <span class="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-300 shadow-sm"><i class="fa-solid fa-industry mr-1"></i>โรงงาน: ${currentPlantTicketcode}</span>`
+            displayDocText += ` <span class="ml-2 text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded border border-purple-300 shadow-sm"><i class="fa-solid fa-ticket mr-1"></i>เลขที่ตั๋ว: ${currentPlantTicketcode}</span>`
         }
         document.getElementById('docNumberText').innerHTML = displayDocText;
         document.getElementById('expectedTotal').innerText = ocrExpectedQty;
@@ -1760,7 +1982,7 @@ function renderAdminDashboard() {
     const tableBody = document.getElementById('adminRecordTableBody');
     const scaleTableBody = document.getElementById('scaleDailyRecordTableBody');
     if(todayRecords.length === 0) {
-        const emptyMsg = `<tr><td colspan="10" class="text-center text-gray-500 py-10 text-lg">${isDailyDiscrepancyFilterOn ? 'ไม่พบบิลที่ยอดไม่ตรง' : `ไม่พบข้อมูลของวันที่ ${targetDateStr}`}</td></tr>`;
+        const emptyMsg = `<tr><td colspan="14" class="text-center text-gray-500 py-10 text-lg">${isDailyDiscrepancyFilterOn ? 'ไม่พบบิลที่ยอดไม่ตรง' : `ไม่พบข้อมูลของวันที่ ${targetDateStr}`}</td></tr>`;
         if(tableBody) tableBody.innerHTML = emptyMsg;
         if(scaleTableBody) scaleTableBody.innerHTML = emptyMsg;
         return;
@@ -1801,6 +2023,8 @@ function renderAdminDashboard() {
                 <td class="px-4 py-3 text-right ${statusColor}">${record.actualQty}</td>
                 <td class="px-4 py-3 text-center ${diffColor}">${diffText}</td>
                 <td class="px-4 py-3 text-right font-bold text-green-700">${record.calculated_weight ? record.calculated_weight.toLocaleString() : '0'}</td>
+${crossCheckCells(record)}
+${truckLinkCell(record)}
                 <td class="px-4 py-2">${palletItemsHtml}</td>
                 <td class="px-4 py-3 text-center">
                     ${record.hasImage
@@ -1864,7 +2088,7 @@ async function generateMonthlyReport() {
         const scaleTableBody = document.getElementById('scaleMonthlyRecordTableBody');
 
         if(monthlyRecords.length === 0) {
-            const emptyMsg = '<tr><td colspan="10" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลในเดือนที่เลือก</td></tr>';
+            const emptyMsg = '<tr><td colspan="14" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลในเดือนที่เลือก</td></tr>';
             if(tableBody) tableBody.innerHTML = emptyMsg;
             if(scaleTableBody) scaleTableBody.innerHTML = emptyMsg;
             return;
@@ -1905,6 +2129,8 @@ async function generateMonthlyReport() {
                     <td class="px-4 py-3 text-right ${statusColor}">${record.actualQty}</td>
                     <td class="px-4 py-3 text-center ${diffColor}">${diffText}</td>
                     <td class="px-4 py-3 text-right font-bold text-green-700">${record.calculated_weight ? record.calculated_weight.toLocaleString() : '0'}</td>
+${crossCheckCells(record)}
+${truckLinkCell(record)}
                     <td class="px-4 py-2">${palletItemsHtml}</td>
                     <td class="px-4 py-3 text-center">
                         ${record.hasImage
@@ -1920,6 +2146,213 @@ async function generateMonthlyReport() {
         if (error.message === "Unauthorized") return;
         console.error("ไม่สามารถโหลดรายงานรายเดือนได้:", error);
     }
+}
+
+// เทียบน้ำหนักที่ checker คำนวณได้ กับน้ำหนักสุทธิจากตาชั่ง
+// API จะส่ง crossCheck มาเฉพาะ admin กับห้องชั่ง ฝั่ง checker จะได้ค่าว่างและเห็นเป็นขีด
+function crossCheckCells(record) {
+    const cc = record.crossCheck;
+    if (!cc) return `<td class="px-4 py-3 text-right text-gray-300">-</td><td class="px-4 py-3 text-right text-gray-300">-</td>`;
+
+    if (cc.scaleNetWeight === null) {
+        const waiting = `<span class="text-amber-600 text-xs italic">รอชั่งออก</span>`;
+        return `<td class="px-4 py-3 text-right">${waiting}</td><td class="px-4 py-3 text-right">${waiting}</td>`;
+    }
+
+    const diff = cc.difference;
+    const diffClass = diff === 0 ? 'text-green-600' : 'text-red-600';
+    const diffText = diff > 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString();
+    return `
+        <td class="px-4 py-3 text-right font-bold text-teal-700">${cc.scaleNetWeight.toLocaleString()}</td>
+        <td class="px-4 py-3 text-right font-bold ${diffClass}">${diffText}</td>`;
+}
+
+// ข้อมูลอย่างชื่อคนขับ/ชื่อลูกค้ามาจากไฟล์ Excel ของระบบตาชั่ง ควบคุมเนื้อหาไม่ได้
+// ต้อง escape ก่อนยัดลง innerHTML ไม่งั้นอักขระอย่าง < & " จะทำให้ตารางเพี้ยนหรือถูกแทรกแท็กได้
+function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[ch]);
+}
+
+// ช่องลิงก์จากเอกสาร OCR ไปยังเที่ยวชั่งที่ผูกกันไว้
+// ใช้ตอน admin เจอใบที่จำนวนพาเลทไม่ตรง แล้วต้องการรู้ว่ามาจากรถคันไหน คนขับเป็นใคร เข้ามากี่โมง
+function truckLinkCell(record) {
+    const truck = record.truckDetail || {};
+    const plate = escapeHtml(truck.license_plate || '-');
+    const key = record.truckLink && record.truckLink.truckWeighingKey;
+
+    // ไม่มี truckLink = ไม่ใช่ admin/ห้องชั่ง (backend ไม่ส่งมาให้)
+    if (!record.truckLink) {
+        return `<td class="px-4 py-3 text-center text-gray-300">-</td>`;
+    }
+    // มีสิทธิ์ดูแต่ยังจับคู่ไม่ได้ เช่น OCR อ่านทะเบียนไม่ตรงกับใบตาชั่ง หรือรถยังไม่เข้าระบบ
+    if (!key) {
+        return `<td class="px-4 py-3 text-center">
+                    <div class="text-sm font-semibold text-gray-600">${plate}</div>
+                    <div class="text-xs text-gray-400 italic">ยังไม่ผูกกับเที่ยวชั่ง</div>
+                </td>`;
+    }
+
+    const driver = escapeHtml(truck.driver_name || '-');
+    return `<td class="px-4 py-3 text-center">
+                <button onclick="openLinkedTrip('${escapeHtml(key)}')"
+                        class="w-full px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 transition-colors text-left"
+                        title="ดูข้อมูลรถและคนขับของเที่ยวชั่งที่ผูกกับเอกสารใบนี้">
+                    <div class="text-sm font-bold text-indigo-700"><i class="fa-solid fa-truck mr-1"></i>${plate}</div>
+                    <div class="text-xs text-indigo-500 truncate max-w-[10rem]">${driver}</div>
+                </button>
+            </td>`;
+}
+
+// ช่องลิงก์ทางกลับ จากเที่ยวชั่งไปยังใบส่งกระบะที่ผูกไว้
+function linkedDocumentCell(truck) {
+    const docs = truck.documentNumbers || [];
+    if (!truck.truckWeighingKey || docs.length === 0) {
+        return `<span class="text-gray-400 text-xs italic">ยังไม่มีใบผูก</span>`;
+    }
+    const label = docs.length > 1 ? `${escapeHtml(docs[0])} +${docs.length - 1}` : escapeHtml(docs[0]);
+    return `<button onclick="openLinkedTrip('${escapeHtml(truck.truckWeighingKey)}')"
+                    class="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 font-bold text-xs transition-colors"
+                    title="ดูใบส่งกระบะที่ผูกกับเที่ยวชั่งนี้">
+                <i class="fa-solid fa-file-lines mr-1"></i>${label}
+            </button>`;
+}
+
+async function openLinkedTrip(truckWeighingKey) {
+    const modal = document.getElementById('linkedTripModal');
+    const body = document.getElementById('linkedTripBody');
+    if (!modal || !body) return;
+
+    body.innerHTML = `<div class="py-10 text-center text-gray-500"><i class="fa-solid fa-spinner fa-spin mr-2"></i>กำลังโหลดข้อมูลเชื่อมโยง...</div>`;
+    modal.classList.remove('hidden');
+
+    try {
+        const response = await fetchWithAuth(`/api/linked-trip/${encodeURIComponent(truckWeighingKey)}`);
+        const result = await response.json();
+        if (!result.success) {
+            body.innerHTML = `<div class="py-10 text-center text-gray-500">${escapeHtml(result.message || 'ไม่พบข้อมูล')}</div>`;
+            return;
+        }
+        body.innerHTML = renderLinkedTrip(result);
+    } catch (error) {
+        if (error.message === "Unauthorized") return;
+        console.error("โหลดข้อมูลเชื่อมโยงไม่สำเร็จ:", error);
+        body.innerHTML = `<div class="py-10 text-center text-gray-500">เชื่อมต่อเซิร์ฟเวอร์ไม่สำเร็จ</div>`;
+    }
+}
+
+function closeLinkedTrip(event) {
+    // คลิกพื้นหลังถึงจะปิด คลิกในกล่องไม่ปิด
+    if (event && event.target !== event.currentTarget) return;
+    const modal = document.getElementById('linkedTripModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+function renderLinkedTrip(result) {
+    const t = result.truck;
+    const fmt = (v) => (v === null || v === undefined) ? '-' : Number(v).toLocaleString();
+
+    const truckHtml = !t
+        ? `<div class="text-gray-500 italic">ไม่พบเที่ยวชั่งที่ตรงกับรหัสนี้ (ข้อมูลตาชั่งอาจถูกลบหรือยังไม่ซิงก์)</div>`
+        : `
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+            ${linkedField('ทะเบียนรถ', t.licensePlate, 'text-teal-700 font-bold')}
+            ${linkedField('คนขับ', t.driverName, 'text-gray-800 font-bold')}
+            ${linkedField('โรงงานที่ชั่ง', t.plantName)}
+            ${linkedField('จุดชั่ง', t.weightInStation)}
+            ${linkedField('เลขที่ใบชั่งเข้า', t.weightInTicket)}
+            ${linkedField('เลขที่ใบชั่งออก', t.weightOutTicket)}
+            ${linkedField('เวลาเข้า', t.weightInTime, 'text-blue-700 font-bold')}
+            ${linkedField('เวลาออก', t.weightOutTime, 'text-purple-700 font-bold')}
+            ${linkedField('น้ำหนักเข้า (กก.)', fmt(t.weightIn), 'text-blue-700 font-bold')}
+            ${linkedField('น้ำหนักออก (กก.)', t.weightOut === null ? 'รอรถออก' : fmt(t.weightOut), 'text-purple-700 font-bold')}
+            ${linkedField('น้ำหนักพาเลทที่คืน (กก.)', t.netWeight === null ? 'รอรถออก' : fmt(t.netWeight), 'text-green-700 font-bold')}
+        </div>`;
+
+    const img = result.scaleImage;
+    const scaleHtml = !img
+        ? `<div class="text-gray-500 italic text-sm">ห้องชั่งยังไม่ได้ถ่ายรูปรถในเที่ยวนี้</div>`
+        : `
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="text-sm text-gray-600">
+                บันทึกโดย <span class="font-bold text-gray-800">${escapeHtml(img.operatorName)}</span>
+                เมื่อ <span class="font-bold text-gray-800">${escapeHtml(img.createdAt)}</span>
+                ${img.palletQuantity !== null && img.palletQuantity !== undefined
+                    ? ` · แจ้งจำนวนพาเลท <span class="font-bold text-indigo-700">${escapeHtml(img.palletQuantity)}</span>`
+                    : ''}
+            </div>
+            <button onclick="openTruckImage(${img.imageId})"
+                    class="text-teal-700 hover:text-teal-900 bg-teal-100 hover:bg-teal-200 px-3 py-1.5 rounded-lg font-bold text-xs transition-colors">
+                <i class="fa-solid fa-image mr-1"></i> ดูรูปรถ
+            </button>
+        </div>`;
+
+    const docs = result.documents || [];
+    const docsHtml = docs.length === 0
+        ? `<div class="text-gray-500 italic text-sm">ยังไม่มีใบส่งกระบะผูกกับเที่ยวชั่งนี้</div>`
+        : `
+        <div class="overflow-x-auto">
+            <table class="w-full text-left text-sm whitespace-nowrap">
+                <thead class="bg-gray-100 text-gray-700 text-xs uppercase">
+                    <tr>
+                        <th class="px-3 py-2">เลขที่เอกสาร</th>
+                        <th class="px-3 py-2">วันที่</th>
+                        <th class="px-3 py-2">ลูกค้า</th>
+                        <th class="px-3 py-2 text-center">ผู้ตรวจนับ</th>
+                        <th class="px-3 py-2 text-right">ลูกค้าแจ้ง</th>
+                        <th class="px-3 py-2 text-right">นับได้จริง</th>
+                        <th class="px-3 py-2 text-center">ผลต่าง</th>
+                        <th class="px-3 py-2 text-center">ใบเสร็จ</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100">
+                    ${docs.map(d => {
+                        const diff = (d.actualQty || 0) - (d.expectedQty || 0);
+                        const diffClass = diff !== 0 ? 'text-red-600 font-bold' : 'text-gray-400';
+                        return `
+                        <tr class="hover:bg-indigo-50">
+                            <td class="px-3 py-2 font-bold text-gray-800">${escapeHtml(d.documentNumber)}</td>
+                            <td class="px-3 py-2">${escapeHtml(d.date)}</td>
+                            <td class="px-3 py-2 truncate max-w-[14rem]" title="${escapeHtml(d.customerName)}">${escapeHtml(d.customerName)}</td>
+                            <td class="px-3 py-2 text-center">${escapeHtml(d.checkerName)}</td>
+                            <td class="px-3 py-2 text-right">${escapeHtml(d.expectedQty)}</td>
+                            <td class="px-3 py-2 text-right font-bold">${escapeHtml(d.actualQty)}</td>
+                            <td class="px-3 py-2 text-center ${diffClass}">${diff > 0 ? '+' + diff : diff}</td>
+                            <td class="px-3 py-2 text-center">
+                                ${d.hasImage
+                                    ? `<button onclick="openReceiptImage(${d.id})" class="text-blue-500 hover:text-blue-700 bg-blue-100 hover:bg-blue-200 px-2 py-1 rounded transition-colors"><i class="fa-solid fa-image"></i></button>`
+                                    : `<span class="text-gray-400 text-xs italic">ไม่มีรูป</span>`}
+                            </td>
+                        </tr>`;
+                    }).join('')}
+                </tbody>
+            </table>
+        </div>`;
+
+    return `
+        <div class="space-y-5">
+            <section>
+                <h3 class="text-sm font-bold text-teal-700 mb-2 border-b border-teal-100 pb-1"><i class="fa-solid fa-truck-fast mr-1"></i> ฝั่งตาชั่ง (เที่ยวชั่งรถ)</h3>
+                ${truckHtml}
+            </section>
+            <section>
+                <h3 class="text-sm font-bold text-teal-700 mb-2 border-b border-teal-100 pb-1"><i class="fa-solid fa-camera mr-1"></i> รูปรถที่ห้องชั่งบันทึกไว้</h3>
+                ${scaleHtml}
+            </section>
+            <section>
+                <h3 class="text-sm font-bold text-indigo-700 mb-2 border-b border-indigo-100 pb-1"><i class="fa-solid fa-file-lines mr-1"></i> ฝั่งเอกสาร (ใบส่งกระบะที่ผูกกับเที่ยวนี้)</h3>
+                ${docsHtml}
+            </section>
+        </div>`;
+}
+
+function linkedField(label, value, valueClass) {
+    return `
+        <div class="bg-gray-50 rounded-lg px-3 py-2 border border-gray-100">
+            <div class="text-xs text-gray-500">${label}</div>
+            <div class="text-sm ${valueClass || 'text-gray-700'}">${escapeHtml(value ?? '-')}</div>
+        </div>`;
 }
 
 const TRUCK_STATUS_BADGE = {
@@ -1956,7 +2389,7 @@ async function renderScaleHistory(viewKey) {
         const data = result.data || [];
 
         if (data.length === 0) {
-            tableBody.innerHTML = `<tr><td colspan="9" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลรถบรรทุก</td></tr>`;
+            tableBody.innerHTML = `<tr><td colspan="11" class="text-center text-gray-500 py-10 text-lg">ไม่พบข้อมูลรถบรรทุก</td></tr>`;
             return;
         }
 
@@ -1996,6 +2429,8 @@ async function renderScaleHistory(viewKey) {
                     <td class="px-4 py-3 text-right font-semibold text-blue-700">${fmt(truck.weightIn)}</td>
                     <td class="px-4 py-3 text-right font-semibold text-purple-700">${fmt(truck.weightOut)}</td>
                     <td class="px-4 py-3 text-right ${netClass}">${fmt(truck.netWeight)}</td>
+                    <td class="px-4 py-3 text-sm">${escapeHtml(truck.driverName || '-')}</td>
+                    <td class="px-4 py-3 text-center">${linkedDocumentCell(truck)}</td>
                     <td class="px-4 py-3 text-center">${scaleImgBtn}</td>
                 </tr>`;
         });
@@ -2082,22 +2517,24 @@ function closeImageModal() {
 }
 
 async function clearDatabase() {
-    if(confirm("คำเตือน: คุณต้องการล้างข้อมูลประวัติทั้งหมด (รวมทั้งรูปรถ) ใช่หรือไม่? (การกระทำนี้จะลบข้อมูลออกจากฐานข้อมูลจริงและไม่สามารถกู้คืนได้)")) {
-        try {
-            const response = await fetchWithAuth('/api/clear', { method: 'DELETE' });
-            const result = await response.json();
-            
-            if(result.success) {
-                updateAdminDashboard();
-                generateMonthlyReport();
-                showCustomAlert('success', 'ล้างข้อมูลสำเร็จ', 'ลบประวัติในฐานข้อมูลระบบเรียบร้อยแล้ว');
-            } else {
-                showCustomAlert('warning', 'เกิดข้อผิดพลาด', result.message);
-            }
-        } catch(e) {
-            if (e.message === "Unauthorized") return;
-            showCustomAlert('warning', 'การเชื่อมต่อผิดพลาด', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
+    const ok = await showCustomConfirm('warning', 'ล้างข้อมูลประวัติทั้งหมด',
+        'ประวัติการรับพาเลทและรูปถ่ายรถทั้งหมดจะถูกลบออกจากฐานข้อมูลจริง และกู้คืนไม่ได้', 'ล้างข้อมูล');
+    if (!ok) return;
+
+    try {
+        const response = await fetchWithAuth('/api/clear', { method: 'DELETE' });
+        const result = await response.json();
+
+        if(result.success) {
+            updateAdminDashboard();
+            generateMonthlyReport();
+            showCustomAlert('success', 'ล้างข้อมูลสำเร็จ', 'ลบประวัติในฐานข้อมูลระบบเรียบร้อยแล้ว');
+        } else {
+            showCustomAlert('warning', 'เกิดข้อผิดพลาด', result.message);
         }
+    } catch(e) {
+        if (e.message === "Unauthorized") return;
+        showCustomAlert('warning', 'การเชื่อมต่อผิดพลาด', 'ไม่สามารถเชื่อมต่อฐานข้อมูลได้');
     }
 }
 
@@ -2123,6 +2560,45 @@ function showCustomAlert(type, title, message) {
     modal.classList.remove('hidden');
 }
 
-function closeAlert() { 
-    document.getElementById('customAlertModal').classList.add('hidden'); 
+function closeAlert() {
+    document.getElementById('customAlertModal').classList.add('hidden');
+}
+
+const CONFIRM_STYLES = {
+    warning: { icon: 'fa-circle-exclamation text-red-500', btn: 'bg-red-600 hover:bg-red-700' },
+    info: { icon: 'fa-circle-question text-blue-500', btn: 'bg-blue-600 hover:bg-blue-700' },
+    success: { icon: 'fa-circle-check text-green-500', btn: 'bg-green-600 hover:bg-green-700' }
+};
+
+// ใช้แทน confirm() ของเบราว์เซอร์ คืนค่าเป็น Promise<boolean> เรียกด้วย await ได้เลย
+function showCustomConfirm(type, title, message, confirmText = 'ยืนยัน') {
+    const modal = document.getElementById('customConfirmModal');
+    const okBtn = document.getElementById('confirmOkButton');
+    const cancelBtn = document.getElementById('confirmCancelButton');
+    const style = CONFIRM_STYLES[type];
+
+    document.getElementById('confirmTitle').innerText = title;
+    document.getElementById('confirmMessage').innerText = message;
+    document.getElementById('confirmIcon').innerHTML = `<i class="fa-solid ${style.icon}"></i>`;
+    okBtn.innerText = confirmText;
+    okBtn.className = `flex-1 text-white py-3 rounded-lg font-bold text-lg transition-all active:scale-95 shadow-sm ${style.btn}`;
+    modal.classList.remove('hidden');
+
+    return new Promise(resolve => {
+        const finish = (result) => {
+            modal.classList.add('hidden');
+            okBtn.removeEventListener('click', onOk);
+            cancelBtn.removeEventListener('click', onCancel);
+            modal.removeEventListener('click', onBackdrop);
+            resolve(result);
+        };
+        const onOk = () => finish(true);
+        const onCancel = () => finish(false);
+        // คลิกพื้นหลังนอกกล่อง = ยกเลิก เหมือนพฤติกรรม modal ทั่วไป
+        const onBackdrop = (e) => { if (e.target === modal) finish(false); };
+
+        okBtn.addEventListener('click', onOk);
+        cancelBtn.addEventListener('click', onCancel);
+        modal.addEventListener('click', onBackdrop);
+    });
 }

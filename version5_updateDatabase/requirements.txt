@@ -4,7 +4,8 @@ fastapi
 uvicorn
 python-multipart
 openai
-google-generativeai
+google-genai
+anthropic
 python-dotenv
 pandas
 openpyxl
